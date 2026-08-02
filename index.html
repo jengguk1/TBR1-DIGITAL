@@ -27,7 +27,7 @@
 }
 
 *{box-sizing:border-box;}
-html,body{margin:0;padding:0;height:100%;overflow:hidden;}
+html,body{margin:0;padding:0;height:100%;}
 body{
   font-family:'Segoe UI',Roboto,Arial,sans-serif;
   background:#E9E3F5;
@@ -35,23 +35,20 @@ body{
   -webkit-tap-highlight-color:transparent;
 }
 
-/* App dibatasi lebar ala HP, tinggi PAS layar (bukan cuma minimal),
-   flex-column supaya header/footer diam & cuma konten tengah yang scroll */
+/* App dibatasi lebar ala HP, tetap rapi kalau dibuka di layar besar */
 #screen-splash, #screen-login, #screen-app{
   max-width:480px;
   margin:0 auto;
-  height:100vh;
-  height:calc(var(--vh, 1vh) * 100); /* fix tinggi layar WebView Android supaya tidak overflow */
+  min-height:100vh;
+  min-height:calc(var(--vh, 1vh) * 100); /* fix tinggi layar WebView Android supaya tidak overflow */
   background:var(--white);
   position:relative;
   box-shadow:var(--shadow);
-  overflow:hidden;
-  display:flex;
-  flex-direction:column;
 }
 
 .screen{display:none;}
-.screen.active{display:flex;}
+.screen.active{display:block;}
+.screen.active.splash{display:flex;}
 
 /* ===== SPLASH ===== */
 .splash{
@@ -81,7 +78,7 @@ body{
 
 /* ===== LOGIN / SETUP ===== */
 #screen-login{display:none;}
-#screen-login.active{display:flex;flex-direction:column;align-items:center;justify-content:center;overflow-y:auto;}
+#screen-login.active{display:flex;align-items:center;}
 .auth-card{width:100%;padding:20px 24px 16px;text-align:center;}
 .auth-logo{font-size:30px;font-weight:800;color:var(--purple-700);}
 .auth-sub{font-size:11px;letter-spacing:4px;color:var(--purple-600);font-weight:600;margin-bottom:4px;}
@@ -134,24 +131,17 @@ body{
 .auth-toggle{text-align:center;font-size:12.5px;color:var(--gray-500);margin-top:10px;}
 
 /* ===== APP SHELL ===== */
-.app-shell{display:none;flex-direction:column;overflow:hidden;}
-.app-shell.active{display:flex;}
+.app-shell{display:none;padding-bottom:70px;}
+.app-shell.active{display:block;}
 .app-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:13px 18px;
   background:var(--purple-700);
   color:var(--white);
-  flex-shrink:0;
+  position:sticky;top:0;z-index:5;
 }
 .app-header h1{font-size:17px;margin:0;font-weight:700;}
 .icon-btn{background:none;border:none;color:var(--white);font-size:18px;cursor:pointer;}
-
-/* Ini satu-satunya area yang boleh discroll di dalam app-shell */
-.app-content{
-  flex:1;
-  overflow-y:auto;
-  overflow-x:hidden;
-}
 
 .page{display:none;padding:14px;}
 .page.active{display:block;}
@@ -244,7 +234,8 @@ body{
 }
 
 .bottom-nav{
-  flex-shrink:0;
+  position:fixed;bottom:0;left:0;right:0;
+  max-width:480px;margin:0 auto;
   background:var(--white);
   border-top:1px solid var(--gray-300);
   display:flex;
@@ -328,7 +319,7 @@ body{
 }
 
 /* Detail percakapan */
-#page-chat-detail{padding:0;display:none;flex-direction:column;height:100%;}
+#page-chat-detail{padding:0;display:none;flex-direction:column;height:calc(var(--vh, 1vh) * 100 - 62px);}
 #page-chat-detail.active{display:flex;}
 .chat-detail-header{
   display:flex;align-items:center;gap:10px;
@@ -510,9 +501,6 @@ body{
     <button class="icon-btn" id="btn-notif">🔔</button>
   </header>
 
-  <!-- Area konten: ini yang boleh discroll, header & bottom-nav diam -->
-  <div class="app-content">
-
   <!-- Halaman: Dashboard -->
   <main id="page-dashboard" class="page active">
     <div class="greet">
@@ -637,8 +625,6 @@ body{
       <p class="muted small">Kita fokuskan dulu fondasi aplikasinya.</p>
     </div>
   </main>
-
-  </div> <!-- /app-content -->
 
   <!-- Bottom Navigation -->
   <nav class="bottom-nav">
