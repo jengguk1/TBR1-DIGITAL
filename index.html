@@ -281,6 +281,7 @@ body{
 .chat-list-info{flex:1;min-width:0;}
 .chat-list-top{display:flex;justify-content:space-between;align-items:baseline;}
 .chat-list-name{font-size:14px;font-weight:700;color:var(--gray-900);}
+.chat-list-name-wrap{display:flex;align-items:center;}
 .chat-list-time{font-size:11px;color:var(--gray-500);}
 .chat-list-preview{
   font-size:12.5px;color:var(--gray-500);
@@ -293,6 +294,28 @@ body{
   min-width:18px;height:18px;border-radius:20px;
   display:flex;align-items:center;justify-content:center;
   padding:0 5px;
+}
+.unread-dot{
+  display:none;
+  width:9px;height:9px;
+  background:#E0333F;
+  border-radius:50%;
+  margin-left:6px;
+  flex-shrink:0;
+}
+.chat-global-dot{
+  width:9px;height:9px;
+  background:#E0333F;
+  border-radius:50%;
+  display:none;
+}
+.menu-card .chat-global-dot{
+  position:absolute;top:10px;right:10px;
+}
+.nav-icon-wrap{position:relative;display:inline-block;font-size:18px;}
+.nav-dot{
+  width:8px;height:8px;
+  position:absolute;top:-2px;right:-4px;
 }
 
 /* Detail percakapan */
@@ -493,16 +516,16 @@ body{
         <span class="menu-icon">👤</span> Profil Saya
       </button>
       <button class="menu-card" data-page="dokumen">
-        <span class="menu-icon">📁</span> Dokumen
+        <span class="menu-icon">📁</span> Dokumen <span class="badge-soon">Segera</span>
       </button>
       <button class="menu-card" data-page="chat">
-        <span class="menu-icon">💬</span> Chat
+        <span class="menu-icon">💬</span> Chat <span class="chat-global-dot" style="display:none;"></span>
       </button>
       <button class="menu-card soon" data-page="soon">
         <span class="menu-icon">📢</span> Pengumuman <span class="badge-soon">Segera</span>
       </button>
       <button class="menu-card" data-page="komunitas">
-        <span class="menu-icon">👥</span> Komunitas
+        <span class="menu-icon">👥</span> Komunitas <span class="badge-soon">Segera</span>
       </button>
       <button class="menu-card" data-page="pengaturan">
         <span class="menu-icon">⚙️</span> Pengaturan
@@ -606,7 +629,7 @@ body{
   <!-- Bottom Navigation -->
   <nav class="bottom-nav">
     <button class="nav-item active" data-page="dashboard"><span>🏠</span>Beranda</button>
-    <button class="nav-item" data-page="chat"><span>💬</span>Chat</button>
+    <button class="nav-item" data-page="chat"><span class="nav-icon-wrap">💬<span class="chat-global-dot nav-dot" style="display:none;"></span></span>Chat</button>
     <button class="nav-item" data-page="soon"><span>📢</span>Pengumuman</button>
     <button class="nav-item" data-page="profil"><span>👤</span>Profil</button>
   </nav>
@@ -1041,12 +1064,38 @@ function goToChat(){
   showPage('chat');
 }
 
+let latestMsgPerChat = {}; // chatId -> {from, createdAtMillis}
+
+function getLastSeenMap(){
+  const raw = localStorage.getItem('tbr1_chat_last_seen');
+  return raw ? JSON.parse(raw) : {};
+}
+function setLastSeen(chatId, millis){
+  const map = getLastSeenMap();
+  map[chatId] = millis;
+  localStorage.setItem('tbr1_chat_last_seen', JSON.stringify(map));
+}
+function isChatUnread(chatId){
+  const acc = getAccount();
+  const m = latestMsgPerChat[chatId];
+  if(!m || !acc || m.from === acc.uid) return false;
+  const seen = getLastSeenMap()[chatId] || 0;
+  return m.createdAtMillis > seen;
+}
+function perbaruiBadgeGlobal(){
+  const ada = Object.keys(latestMsgPerChat).some(isChatUnread);
+  document.querySelectorAll('.chat-global-dot').forEach(el => {
+    el.style.display = ada ? 'block' : 'none';
+  });
+}
+
 function muatPreview(chatId){
   db.collection('chats').doc(chatId).collection('messages')
     .orderBy('createdAt', 'desc').limit(1).get()
     .then(msgSnap => {
       const elText = document.getElementById('pv-text-' + chatId);
       const elTime = document.getElementById('pv-time-' + chatId);
+      const elDot = document.getElementById('pv-dot-' + chatId);
       if(!elText) return; // user sudah pindah halaman
       if(msgSnap.empty){
         elText.textContent = 'Belum ada pesan';
@@ -1054,7 +1103,10 @@ function muatPreview(chatId){
         const m = msgSnap.docs[0].data();
         elText.textContent = (m.fromName ? m.fromName + ': ' : '') + m.text;
         if(elTime && m.createdAt) elTime.textContent = formatJamChat(m.createdAt.toDate());
+        latestMsgPerChat[chatId] = { from: m.from, createdAtMillis: m.createdAt ? m.createdAt.toMillis() : Date.now() };
       }
+      if(elDot) elDot.style.display = isChatUnread(chatId) ? 'inline-block' : 'none';
+      perbaruiBadgeGlobal();
     });
 }
 
@@ -1070,7 +1122,7 @@ function renderChatList(){
     <div class="avatar-circle" style="background:var(--purple-800)">👥</div>
     <div class="chat-list-info">
       <div class="chat-list-top">
-        <span class="chat-list-name">Grup Guru &amp; Staf</span>
+        <span class="chat-list-name-wrap"><span class="chat-list-name">Grup Guru &amp; Staf</span><span class="unread-dot" id="pv-dot-${GRUP_STAF_ID}"></span></span>
         <span class="chat-list-time" id="pv-time-${GRUP_STAF_ID}"></span>
       </div>
       <p class="chat-list-preview" id="pv-text-${GRUP_STAF_ID}">Memuat...</p>
@@ -1103,7 +1155,7 @@ function renderChatList(){
         <div class="avatar-circle" style="background:var(--purple-600)">${initial(k.nama)}</div>
         <div class="chat-list-info">
           <div class="chat-list-top">
-            <span class="chat-list-name">${k.nama || '(Tanpa nama)'}</span>
+            <span class="chat-list-name-wrap"><span class="chat-list-name">${k.nama || '(Tanpa nama)'}</span><span class="unread-dot" id="pv-dot-${chatId}"></span></span>
             <span class="chat-list-time" id="pv-time-${chatId}"></span>
           </div>
           <p class="chat-list-preview" id="pv-text-${chatId}">Memuat...</p>
@@ -1130,6 +1182,8 @@ function openChatDetail(kontak, isGroup){
 
   showPage('chat-detail');
   $('header-title').textContent = kontak.nama || 'Chat';
+  setLastSeen(activeChatId, Date.now());
+  perbaruiBadgeGlobal();
 
   const box = $('chat-messages');
   box.innerHTML = '<p class="muted small" style="text-align:center;">Memuat pesan...</p>';
@@ -1143,6 +1197,8 @@ function openChatDetail(kontak, isGroup){
         box.innerHTML = '<p class="muted small" style="text-align:center;">Belum ada pesan. Mulai obrolan yuk.</p>';
         return;
       }
+      setLastSeen(activeChatId, Date.now()); // lagi buka chat ini, anggap semua sudah dibaca
+      perbaruiBadgeGlobal();
       snap.forEach(doc => {
         const m = doc.data();
         const isMe = m.from === acc.uid;
@@ -1235,11 +1291,14 @@ function pantauSatuChat(chatId){
     .orderBy('createdAt', 'desc').limit(1)
     .onSnapshot(snap => {
       if(snap.empty){ watcherFirstLoad[chatId] = true; return; }
+      const m = snap.docs[0].data();
+      latestMsgPerChat[chatId] = { from: m.from, createdAtMillis: m.createdAt ? m.createdAt.toMillis() : Date.now() };
+      perbaruiBadgeGlobal();
+
       if(!watcherFirstLoad[chatId]){
         watcherFirstLoad[chatId] = true; // lewati notif untuk pesan lama pas pertama buka
         return;
       }
-      const m = snap.docs[0].data();
       if(m.from !== acc.uid){
         mainkanBunyiNotif();
         if(activeChatId !== chatId || !$('screen-app').classList.contains('active')){
@@ -1255,6 +1314,8 @@ function hentikanPantauChatMasuk(){
   chatWatchers.forEach(u => u());
   chatWatchers = [];
   watcherFirstLoad = {};
+  latestMsgPerChat = {};
+  perbaruiBadgeGlobal();
 }
 
 /* ============================================================
