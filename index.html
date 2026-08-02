@@ -337,6 +337,13 @@ body{
   display:block;
   text-align:right;
 }
+.bubble-sender{
+  display:block;
+  font-size:11px;
+  font-weight:700;
+  color:var(--purple-700);
+  margin-bottom:2px;
+}
 .chat-input-bar{
   display:flex;gap:8px;
   padding:10px 12px calc(10px + env(safe-area-inset-bottom));
@@ -535,6 +542,10 @@ body{
     <div class="settings-group">
       <p class="settings-label">AKUN</p>
       <button class="settings-item" id="btn-ubah-password">Ubah Password <span>›</span></button>
+    </div>
+    <div class="settings-group">
+      <p class="settings-label">NOTIFIKASI</p>
+      <button class="settings-item" id="btn-toggle-sound">🔔 Suara Notifikasi Chat <span id="sound-status">Aktif</span></button>
     </div>
     <div class="settings-group">
       <p class="settings-label">LAINNYA</p>
@@ -927,11 +938,13 @@ function enterApp(){
   refreshGreeting();
   applyRoleUI();
   showPage('dashboard');
+  mulaiPantauChatMasuk();
 }
 
 /* ---------- Logout ---------- */
 function handleLogout(){
   auth.signOut().then(() => {
+    hentikanPantauChatMasuk();
     currentProfile = null;
     authMode = 'login';
     showLoginBlock();
@@ -990,9 +1003,12 @@ function handleUbahPassword(){
 /* ============================================================
    CHAT (REAL) - khusus Guru/Admin/Kepala Sekolah, tersimpan di Firestore
    Kontak = daftar akun staf yang sudah terdaftar (otomatis update)
+   + 1 Grup Chat berisi semua staf (id tetap: 'grup-staf')
    ============================================================ */
+const GRUP_STAF_ID = 'grup-staf';
 let activeChatId = null;
 let activeChatPartnerUid = null;
+let activeChatIsGroup = false;
 let unsubscribeChatMessages = null;
 
 function initial(nama){
@@ -1025,12 +1041,52 @@ function goToChat(){
   showPage('chat');
 }
 
+function muatPreview(chatId){
+  db.collection('chats').doc(chatId).collection('messages')
+    .orderBy('createdAt', 'desc').limit(1).get()
+    .then(msgSnap => {
+      const elText = document.getElementById('pv-text-' + chatId);
+      const elTime = document.getElementById('pv-time-' + chatId);
+      if(!elText) return; // user sudah pindah halaman
+      if(msgSnap.empty){
+        elText.textContent = 'Belum ada pesan';
+      } else {
+        const m = msgSnap.docs[0].data();
+        elText.textContent = (m.fromName ? m.fromName + ': ' : '') + m.text;
+        if(elTime && m.createdAt) elTime.textContent = formatJamChat(m.createdAt.toDate());
+      }
+    });
+}
+
 function renderChatList(){
   const list = $('chat-list');
-  list.innerHTML = '<p class="muted small" style="padding:14px;">Memuat kontak...</p>';
+  list.innerHTML = '';
   const acc = getAccount();
 
+  // --- Grup Staf: selalu ada di paling atas ---
+  const grupBtn = document.createElement('button');
+  grupBtn.className = 'chat-list-item';
+  grupBtn.innerHTML = `
+    <div class="avatar-circle" style="background:var(--purple-800)">👥</div>
+    <div class="chat-list-info">
+      <div class="chat-list-top">
+        <span class="chat-list-name">Grup Guru &amp; Staf</span>
+        <span class="chat-list-time" id="pv-time-${GRUP_STAF_ID}"></span>
+      </div>
+      <p class="chat-list-preview" id="pv-text-${GRUP_STAF_ID}">Memuat...</p>
+    </div>`;
+  grupBtn.addEventListener('click', () => openChatDetail({ nama: 'Grup Guru & Staf' }, true));
+  list.appendChild(grupBtn);
+  muatPreview(GRUP_STAF_ID);
+
+  const loadingEl = document.createElement('p');
+  loadingEl.className = 'muted small';
+  loadingEl.style.padding = '10px 4px';
+  loadingEl.textContent = 'Memuat kontak lainnya...';
+  list.appendChild(loadingEl);
+
   db.collection('users').get().then(snap => {
+    loadingEl.remove();
     const kontak = [];
     snap.forEach(doc => {
       const u = doc.data();
@@ -1039,12 +1095,6 @@ function renderChatList(){
       }
     });
 
-    if(kontak.length === 0){
-      list.innerHTML = '<div class="empty-state"><p class="empty-icon">💬</p><p>Belum ada staf lain yang terdaftar.</p><p class="muted small">Daftar akun baru akan otomatis muncul di sini.</p></div>';
-      return;
-    }
-
-    list.innerHTML = '';
     kontak.forEach(k => {
       const chatId = buatChatId(acc.uid, k.uid);
       const btn = document.createElement('button');
@@ -1058,38 +1108,25 @@ function renderChatList(){
           </div>
           <p class="chat-list-preview" id="pv-text-${chatId}">Memuat...</p>
         </div>`;
-      btn.addEventListener('click', () => openChatDetail(k));
+      btn.addEventListener('click', () => openChatDetail(k, false));
       list.appendChild(btn);
-
-      db.collection('chats').doc(chatId).collection('messages')
-        .orderBy('createdAt', 'desc').limit(1).get()
-        .then(msgSnap => {
-          const elText = document.getElementById('pv-text-' + chatId);
-          const elTime = document.getElementById('pv-time-' + chatId);
-          if(!elText) return; // user sudah pindah halaman
-          if(msgSnap.empty){
-            elText.textContent = 'Belum ada pesan';
-          } else {
-            const m = msgSnap.docs[0].data();
-            elText.textContent = m.text;
-            if(elTime && m.createdAt) elTime.textContent = formatJamChat(m.createdAt.toDate());
-          }
-        });
+      muatPreview(chatId);
     });
   }).catch(() => {
-    list.innerHTML = '<p class="muted small" style="padding:14px;">Gagal memuat daftar kontak. Cek koneksi internet.</p>';
+    loadingEl.textContent = 'Gagal memuat kontak lainnya. Cek koneksi internet.';
   });
 }
 
-function openChatDetail(kontak){
+function openChatDetail(kontak, isGroup){
   const acc = getAccount();
-  activeChatPartnerUid = kontak.uid;
-  activeChatId = buatChatId(acc.uid, kontak.uid);
+  activeChatIsGroup = !!isGroup;
+  activeChatPartnerUid = isGroup ? null : kontak.uid;
+  activeChatId = isGroup ? GRUP_STAF_ID : buatChatId(acc.uid, kontak.uid);
 
   $('cd-name').textContent = kontak.nama || '(Tanpa nama)';
-  $('cd-avatar').textContent = initial(kontak.nama);
-  $('cd-avatar').style.background = 'var(--purple-600)';
-  $('cd-status').textContent = ROLE_LABEL[kontak.peran] || '';
+  $('cd-avatar').textContent = isGroup ? '👥' : initial(kontak.nama);
+  $('cd-avatar').style.background = isGroup ? 'var(--purple-800)' : 'var(--purple-600)';
+  $('cd-status').textContent = isGroup ? 'Guru, Admin & Kepala Sekolah' : (ROLE_LABEL[kontak.peran] || '');
 
   showPage('chat-detail');
   $('header-title').textContent = kontak.nama || 'Chat';
@@ -1108,10 +1145,16 @@ function openChatDetail(kontak){
       }
       snap.forEach(doc => {
         const m = doc.data();
+        const isMe = m.from === acc.uid;
         const div = document.createElement('div');
-        div.className = 'bubble ' + (m.from === acc.uid ? 'bubble-me' : 'bubble-them');
+        div.className = 'bubble ' + (isMe ? 'bubble-me' : 'bubble-them');
         const jam = m.createdAt ? formatJamChat(m.createdAt.toDate()) : '...';
-        div.innerHTML = (m.text || '').replace(/</g,'&lt;') + '<span class="bubble-time">' + jam + '</span>';
+        let isi = '';
+        if(activeChatIsGroup && !isMe){
+          isi += '<span class="bubble-sender">' + (m.fromName || 'Staf') + '</span>';
+        }
+        isi += (m.text || '').replace(/</g,'&lt;') + '<span class="bubble-time">' + jam + '</span>';
+        div.innerHTML = isi;
         box.appendChild(div);
       });
       box.scrollTop = box.scrollHeight;
@@ -1130,6 +1173,7 @@ function handleSendChat(e){
   input.value = '';
   db.collection('chats').doc(activeChatId).collection('messages').add({
     from: acc.uid,
+    fromName: acc.nama,
     text: teks,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(() => showToast('Gagal mengirim pesan, cek koneksi internet.'));
@@ -1139,6 +1183,78 @@ function tutupChatDetail(){
   if(unsubscribeChatMessages){ unsubscribeChatMessages(); unsubscribeChatMessages = null; }
   showPage('chat');
   renderChatList();
+}
+
+/* ---------- Notifikasi bunyi pesan baru (tidak perlu file suara, dibikin langsung) ---------- */
+function getSoundPref(){
+  return localStorage.getItem('tbr1_sound_notif') !== 'off'; // default: aktif
+}
+function setSoundPref(on){
+  localStorage.setItem('tbr1_sound_notif', on ? 'on' : 'off');
+}
+function mainkanBunyiNotif(){
+  if(!getSoundPref()) return;
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(880, ctx.currentTime);
+    o.frequency.setValueAtTime(660, ctx.currentTime + 0.12);
+    g.gain.setValueAtTime(0.16, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + 0.4);
+  }catch(e){ /* browser tidak izinkan, abaikan saja */ }
+}
+
+let chatWatchers = [];
+let watcherFirstLoad = {};
+
+function mulaiPantauChatMasuk(){
+  hentikanPantauChatMasuk();
+  const acc = getAccount();
+  if(!acc || acc.peran === 'wali_murid') return;
+
+  pantauSatuChat(GRUP_STAF_ID);
+
+  db.collection('users').get().then(snap => {
+    snap.forEach(doc => {
+      const u = doc.data();
+      if(doc.id !== acc.uid && u.peran !== 'wali_murid'){
+        pantauSatuChat(buatChatId(acc.uid, doc.id));
+      }
+    });
+  });
+}
+
+function pantauSatuChat(chatId){
+  const acc = getAccount();
+  watcherFirstLoad[chatId] = false;
+  const unsub = db.collection('chats').doc(chatId).collection('messages')
+    .orderBy('createdAt', 'desc').limit(1)
+    .onSnapshot(snap => {
+      if(snap.empty){ watcherFirstLoad[chatId] = true; return; }
+      if(!watcherFirstLoad[chatId]){
+        watcherFirstLoad[chatId] = true; // lewati notif untuk pesan lama pas pertama buka
+        return;
+      }
+      const m = snap.docs[0].data();
+      if(m.from !== acc.uid){
+        mainkanBunyiNotif();
+        if(activeChatId !== chatId || !$('screen-app').classList.contains('active')){
+          showToast('💬 Pesan baru dari ' + (m.fromName || 'seseorang'));
+        }
+        if($('page-chat').classList.contains('active')) renderChatList();
+      }
+    });
+  chatWatchers.push(unsub);
+}
+
+function hentikanPantauChatMasuk(){
+  chatWatchers.forEach(u => u());
+  chatWatchers = [];
+  watcherFirstLoad = {};
 }
 
 /* ============================================================
@@ -1360,6 +1476,15 @@ window.addEventListener('DOMContentLoaded', () => {
   // Pengaturan
   $('btn-ubah-password').addEventListener('click', handleUbahPassword);
   $('btn-logout').addEventListener('click', handleLogout);
+
+  // Toggle suara notifikasi chat
+  $('sound-status').textContent = getSoundPref() ? 'Aktif' : 'Nonaktif';
+  $('btn-toggle-sound').addEventListener('click', () => {
+    setSoundPref(!getSoundPref());
+    $('sound-status').textContent = getSoundPref() ? 'Aktif' : 'Nonaktif';
+    if(getSoundPref()) mainkanBunyiNotif();
+    showToast(getSoundPref() ? 'Suara notifikasi diaktifkan.' : 'Suara notifikasi dimatikan.');
+  });
 
   // Chat: tombol back di halaman detail -> putus listener real-time, balik ke daftar chat
   $('btn-chat-back').addEventListener('click', tutupChatDetail);
