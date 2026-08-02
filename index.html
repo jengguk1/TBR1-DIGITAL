@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>TBR1 DIGITAL</title>
+<style>
+/* ===== TBR1 DIGITAL - Tema warna diambil langsung dari desain asli ===== */
+:root{
+  --purple-900:#2A1060;
+  --purple-800:#34157A;
+  --purple-700:#43168F;
+  --purple-600:#5A2295;
+  --purple-100:#EFE7FA;
+  --purple-050:#F7F4FC;
+  --white:#FFFFFF;
+  --gray-900:#221933;
+  --gray-500:#6E6480;
+  --gray-300:#DCD5EA;
+  --danger:#D64545;
+  --radius:16px;
+  --radius-sm:10px;
+  --shadow:0 8px 24px rgba(52,21,122,0.12);
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;height:100%;}
+body{
+  font-family:'Segoe UI',Roboto,Arial,sans-serif;
+  background:#E9E3F5;
+  color:var(--gray-900);
+  -webkit-tap-highlight-color:transparent;
+}
+
+/* App dibatasi lebar ala HP, tetap rapi kalau dibuka di layar besar */
+#screen-splash, #screen-login, #screen-app{
+  max-width:480px;
+  margin:0 auto;
+  min-height:100vh;
+  min-height:calc(var(--vh, 1vh) * 100); /* fix tinggi layar WebView Android supaya tidak overflow */
+  background:var(--white);
+  position:relative;
+  box-shadow:var(--shadow);
+}
+
+.screen{display:none;}
+.screen.active{display:block;}
+.screen.active.splash{display:flex;}
+
+/* ===== SPLASH ===== */
+.splash{
+  background:linear-gradient(180deg, var(--purple-700) 0%, var(--purple-900) 100%);
+  color:var(--white);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  gap:4px;
+  padding:24px;
+}
+.splash-logo{font-size:52px;font-weight:800;letter-spacing:1px;}
+.splash-sub{font-size:14px;letter-spacing:6px;font-weight:600;opacity:.9;margin-bottom:8px;}
+.splash-caption{font-size:14px;opacity:.85;margin-bottom:40px;}
+.spinner{
+  width:28px;height:28px;
+  border:3px solid rgba(255,255,255,.3);
+  border-top-color:var(--white);
+  border-radius:50%;
+  animation:spin 0.8s linear infinite;
+  margin-bottom:10px;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+.splash-loading{font-size:13px;opacity:.75;}
+
+/* ===== LOGIN / SETUP ===== */
+#screen-login{display:none;}
+#screen-login.active{display:flex;align-items:center;}
+.auth-card{width:100%;padding:32px 24px;text-align:center;}
+.auth-logo{font-size:34px;font-weight:800;color:var(--purple-700);}
+.auth-sub{font-size:11px;letter-spacing:4px;color:var(--purple-600);font-weight:600;margin-bottom:6px;}
+.auth-caption{font-size:13px;color:var(--gray-500);margin-bottom:24px;}
+.auth-card h2{margin:0 0 4px;font-size:20px;}
+.auth-desc{font-size:13px;color:var(--gray-500);margin-bottom:16px;min-height:16px;}
+
+.field{text-align:left;margin-bottom:14px;}
+.field.hidden{display:none;}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--gray-500);margin-bottom:4px;}
+.field input,.field textarea{
+  width:100%;
+  padding:12px 14px;
+  border:1px solid var(--gray-300);
+  border-radius:var(--radius-sm);
+  font-size:14px;
+  background:var(--purple-050);
+}
+.field input:focus,.field textarea:focus{outline:2px solid var(--purple-600);}
+
+.btn-primary{
+  width:100%;
+  padding:14px;
+  background:var(--purple-700);
+  color:var(--white);
+  border:none;
+  border-radius:var(--radius-sm);
+  font-weight:700;
+  font-size:14px;
+  letter-spacing:.5px;
+  margin-top:6px;
+  cursor:pointer;
+}
+.btn-primary:active{background:var(--purple-800);}
+
+.auth-footnote{font-size:11px;color:var(--gray-500);margin-top:16px;}
+.error-text{color:var(--danger);font-size:12px;margin:-6px 0 10px;}
+.error-text.hidden{display:none;}
+.success-text{color:#1E8E5A;font-size:12px;margin:-6px 0 10px;}
+.success-text.hidden{display:none;}
+
+.forgot-wrap{text-align:right;margin:-8px 0 14px;}
+.link-btn{
+  background:none;border:none;
+  color:var(--purple-700);
+  font-size:12.5px;font-weight:600;
+  cursor:pointer;padding:0;
+}
+.link-btn.center{display:block;margin:16px auto 0;}
+.auth-toggle{text-align:center;font-size:12.5px;color:var(--gray-500);margin-top:10px;}
+
+/* ===== APP SHELL ===== */
+.app-shell{display:none;padding-bottom:70px;}
+.app-shell.active{display:block;}
+.app-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 18px;
+  background:var(--purple-700);
+  color:var(--white);
+  position:sticky;top:0;z-index:5;
+}
+.app-header h1{font-size:17px;margin:0;font-weight:700;}
+.icon-btn{background:none;border:none;color:var(--white);font-size:18px;cursor:pointer;}
+
+.page{display:none;padding:18px;}
+.page.active{display:block;}
+
+.greet{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.greet-hi{font-size:17px;font-weight:700;margin:0;}
+.greet-sub{font-size:13px;color:var(--gray-500);margin:2px 0 0;}
+.avatar-circle{
+  width:44px;height:44px;border-radius:50%;
+  background:var(--purple-600);color:var(--white);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:16px;
+}
+.avatar-lg{width:72px;height:72px;font-size:26px;margin:0 auto 10px;}
+
+.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.menu-card{
+  background:var(--purple-050);
+  border:1px solid var(--purple-100);
+  border-radius:var(--radius);
+  padding:20px 10px;
+  text-align:center;
+  font-size:13px;
+  font-weight:600;
+  color:var(--gray-900);
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  cursor:pointer;
+  position:relative;
+}
+.menu-icon{font-size:24px;}
+.menu-card.soon{opacity:.7;}
+.badge-soon{
+  position:absolute;top:8px;right:8px;
+  background:var(--purple-600);color:var(--white);
+  font-size:9px;padding:2px 6px;border-radius:20px;font-weight:700;
+}
+
+.profile-card{text-align:center;margin-bottom:20px;}
+.profile-card h3{margin:0 0 2px;}
+.role-badge{
+  display:inline-block;margin-top:6px;
+  background:var(--purple-100);color:var(--purple-700);
+  font-size:11px;font-weight:700;
+  padding:4px 12px;border-radius:20px;
+}
+.muted{color:var(--gray-500);}
+.small{font-size:12px;}
+
+.komunitas-posts{display:flex;flex-direction:column;gap:12px;padding-bottom:8px;}
+.komunitas-post{
+  background:var(--purple-050);
+  border-radius:var(--radius);
+  padding:12px 14px;
+}
+.komunitas-post-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
+.komunitas-post-nama{font-size:13px;font-weight:700;}
+.komunitas-post-role{
+  font-size:10px;color:var(--purple-700);font-weight:700;
+  background:var(--purple-100);padding:2px 8px;border-radius:12px;margin-left:6px;
+}
+.komunitas-post-time{font-size:11px;color:var(--gray-500);}
+.komunitas-post-text{font-size:13.5px;line-height:1.4;}
+
+.empty-state{text-align:center;padding:60px 20px;color:var(--gray-500);}
+.empty-icon{font-size:40px;margin-bottom:10px;}
+
+.settings-group{margin-bottom:18px;}
+.settings-label{font-size:11px;font-weight:700;color:var(--gray-500);letter-spacing:.5px;margin:0 0 6px 4px;}
+.settings-item{
+  width:100%;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:14px;
+  background:var(--purple-050);
+  border:none;border-bottom:1px solid var(--white);
+  font-size:14px;
+  cursor:pointer;
+  border-radius:var(--radius-sm);
+  margin-bottom:2px;
+}
+.settings-item.static{cursor:default;}
+.btn-outline-danger{
+  width:100%;padding:13px;
+  background:var(--white);
+  border:1px solid var(--danger);
+  color:var(--danger);
+  border-radius:var(--radius-sm);
+  font-weight:700;
+  margin-top:10px;
+  cursor:pointer;
+}
+
+.bottom-nav{
+  position:fixed;bottom:0;left:0;right:0;
+  max-width:480px;margin:0 auto;
+  background:var(--white);
+  border-top:1px solid var(--gray-300);
+  display:flex;
+  padding:8px 0 max(8px, env(safe-area-inset-bottom));
+}
+.nav-item{
+  flex:1;background:none;border:none;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  font-size:11px;color:var(--gray-500);
+  cursor:pointer;
+}
+.nav-item span{font-size:18px;}
+.nav-item.active{color:var(--purple-700);font-weight:700;}
+
+.hidden{display:none;}
+
+/* ===== CHAT (dummy) ===== */
+.dummy-note{
+  background:#FFF6E0;
+  border:1px solid #F0DCA0;
+  color:#8A6A1F;
+  font-size:12px;
+  padding:10px 12px;
+  border-radius:var(--radius-sm);
+  margin-bottom:14px;
+}
+.chat-tabs{display:flex;gap:8px;margin-bottom:14px;}
+.chat-tab{
+  border:none;background:var(--purple-050);color:var(--gray-500);
+  padding:7px 16px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;
+}
+.chat-tab.active{background:var(--purple-700);color:var(--white);}
+
+.chat-list{display:flex;flex-direction:column;gap:2px;}
+.chat-list-item{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 6px;
+  background:none;border:none;text-align:left;width:100%;
+  cursor:pointer;
+  border-bottom:1px solid var(--purple-050);
+}
+.chat-list-item .avatar-circle{flex-shrink:0;}
+.chat-list-info{flex:1;min-width:0;}
+.chat-list-top{display:flex;justify-content:space-between;align-items:baseline;}
+.chat-list-name{font-size:14px;font-weight:700;color:var(--gray-900);}
+.chat-list-time{font-size:11px;color:var(--gray-500);}
+.chat-list-preview{
+  font-size:12.5px;color:var(--gray-500);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  margin-top:2px;
+}
+.chat-unread-badge{
+  background:var(--purple-700);color:var(--white);
+  font-size:10px;font-weight:700;
+  min-width:18px;height:18px;border-radius:20px;
+  display:flex;align-items:center;justify-content:center;
+  padding:0 5px;
+}
+
+/* Detail percakapan */
+#page-chat-detail{padding:0;display:none;flex-direction:column;height:calc(100vh - 62px);}
+#page-chat-detail.active{display:flex;}
+.chat-detail-header{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 16px;
+  border-bottom:1px solid var(--purple-050);
+}
+.icon-btn.dark{color:var(--purple-700);font-size:20px;}
+.cd-name{font-weight:700;font-size:14px;margin:0;}
+.chat-messages{
+  flex:1;overflow-y:auto;
+  padding:16px;
+  display:flex;flex-direction:column;gap:10px;
+  background:var(--purple-050);
+}
+.bubble{
+  max-width:75%;
+  padding:9px 13px;
+  border-radius:16px;
+  font-size:13.5px;
+  line-height:1.4;
+}
+.bubble-them{
+  align-self:flex-start;
+  background:var(--white);
+  border-bottom-left-radius:4px;
+  box-shadow:0 1px 3px rgba(0,0,0,.06);
+}
+.bubble-me{
+  align-self:flex-end;
+  background:var(--purple-700);
+  color:var(--white);
+  border-bottom-right-radius:4px;
+}
+.bubble-time{
+  font-size:10px;
+  opacity:.7;
+  margin-top:3px;
+  display:block;
+  text-align:right;
+}
+.chat-input-bar{
+  display:flex;gap:8px;
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+  border-top:1px solid var(--purple-050);
+  background:var(--white);
+}
+.chat-input-bar input{
+  flex:1;
+  border:1px solid var(--gray-300);
+  border-radius:22px;
+  padding:10px 16px;
+  font-size:14px;
+  background:var(--purple-050);
+}
+.btn-send{
+  width:40px;height:40px;border-radius:50%;
+  background:var(--purple-700);color:var(--white);
+  border:none;font-size:16px;cursor:pointer;
+  flex-shrink:0;
+}
+
+.toast{
+  position:fixed;bottom:90px;left:50%;
+  transform:translateX(-50%) translateY(20px);
+  background:var(--gray-900);color:var(--white);
+  padding:10px 18px;border-radius:30px;
+  font-size:13px;
+  opacity:0;pointer-events:none;
+  transition:.25s;
+  z-index:50;
+  max-width:80%;
+  text-align:center;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+</style>
+</head>
+<body>
+
+<!-- ====== 1. SPLASH SCREEN ====== -->
+<section id="screen-splash" class="screen active splash">
+  <div class="splash-logo">TBR1</div>
+  <div class="splash-sub">D I G I T A L</div>
+  <p class="splash-caption">Komunitas Digital SDN TAMBERU 1</p>
+  <div class="spinner"></div>
+  <p class="splash-loading">Memuat...</p>
+</section>
+
+<!-- ====== 2. LOGIN / SETUP AKUN (offline, sekali daftar di HP ini) ====== -->
+<section id="screen-login" class="screen">
+  <div class="auth-card">
+    <div class="auth-logo">TBR1</div>
+    <div class="auth-sub">D I G I T A L</div>
+    <p class="auth-caption">Komunitas Digital SDN TAMBERU 1</p>
+
+    <div id="login-block">
+      <h2 id="auth-title">Masuk</h2>
+      <p id="auth-desc" class="auth-desc"></p>
+
+      <form id="auth-form">
+        <div id="field-nama" class="field hidden">
+          <label>Nama Lengkap</label>
+          <input type="text" id="input-nama" placeholder="Contoh: Aji Saputra">
+        </div>
+        <div id="field-peran" class="field hidden">
+          <label>Peran</label>
+          <select id="input-peran">
+            <option value="" disabled selected>Pilih peran</option>
+            <option value="guru">Guru</option>
+            <option value="wali_murid">Wali Murid</option>
+            <option value="admin">Admin / Tata Usaha</option>
+            <option value="kepala_sekolah">Kepala Sekolah</option>
+          </select>
+        </div>
+        <div id="field-kelas" class="field hidden">
+          <label>Kelas Anak</label>
+          <select id="input-kelas">
+            <option value="" disabled selected>Pilih kelas</option>
+            <option>Kelas 1</option>
+            <option>Kelas 2</option>
+            <option>Kelas 3</option>
+            <option>Kelas 4</option>
+            <option>Kelas 5</option>
+            <option>Kelas 6</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="input-email" placeholder="nama@sdntamberu1.sch.id" required>
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="input-password" placeholder="Minimal 6 karakter" required>
+        </div>
+        <div class="forgot-wrap" id="forgot-link-wrap">
+          <button type="button" class="link-btn" id="btn-forgot">Lupa Password?</button>
+        </div>
+        <p id="auth-error" class="error-text hidden"></p>
+        <button type="submit" class="btn-primary" id="auth-submit-btn">MASUK</button>
+      </form>
+      <p class="auth-footnote">🌐 Akun tersimpan online, bisa dipakai dari HP mana saja.</p>
+      <p class="auth-toggle">
+        <span id="auth-toggle-text">Belum punya akun?</span>
+        <button type="button" class="link-btn" id="btn-toggle-auth">Daftar di sini</button>
+      </p>
+    </div>
+
+    <div id="forgot-block" class="hidden">
+      <h2>Reset Password</h2>
+      <p class="auth-desc">Masukkan email akun kamu. Link reset password akan dikirim ke email itu.</p>
+      <form id="forgot-form">
+        <div class="field">
+          <label>Email Terdaftar</label>
+          <input type="email" id="fp-email" placeholder="Email yang dipakai saat daftar" required>
+        </div>
+        <p id="forgot-error" class="error-text hidden"></p>
+        <p id="forgot-success" class="success-text hidden"></p>
+        <button type="submit" class="btn-primary" id="forgot-submit-btn">KIRIM LINK RESET</button>
+      </form>
+      <button type="button" class="link-btn center" id="btn-back-to-login">‹ Kembali ke Masuk</button>
+    </div>
+  </div>
+</section>
+
+<!-- ====== APP SHELL (setelah login) ====== -->
+<section id="screen-app" class="screen app-shell">
+
+  <!-- Header -->
+  <header class="app-header">
+    <button class="icon-btn" id="btn-back" style="visibility:hidden">←</button>
+    <h1 id="header-title">Beranda</h1>
+    <button class="icon-btn" id="btn-notif">🔔</button>
+  </header>
+
+  <!-- Halaman: Dashboard -->
+  <main id="page-dashboard" class="page active">
+    <div class="greet">
+      <div>
+        <p class="greet-hi">Halo, <span id="greet-name">Guru</span> 👋</p>
+        <p class="greet-sub" id="greet-role">Selamat datang kembali</p>
+      </div>
+      <div class="avatar-circle" id="greet-avatar">G</div>
+    </div>
+
+    <div class="menu-grid">
+      <button class="menu-card" data-page="profil">
+        <span class="menu-icon">👤</span> Profil Saya
+      </button>
+      <button class="menu-card" data-page="dokumen">
+        <span class="menu-icon">📁</span> Dokumen
+      </button>
+      <button class="menu-card" data-page="chat">
+        <span class="menu-icon">💬</span> Chat
+      </button>
+      <button class="menu-card soon" data-page="soon">
+        <span class="menu-icon">📢</span> Pengumuman <span class="badge-soon">Segera</span>
+      </button>
+      <button class="menu-card" data-page="komunitas">
+        <span class="menu-icon">👥</span> Komunitas
+      </button>
+      <button class="menu-card" data-page="pengaturan">
+        <span class="menu-icon">⚙️</span> Pengaturan
+      </button>
+    </div>
+  </main>
+
+  <!-- Halaman: Profil Saya -->
+  <main id="page-profil" class="page">
+    <div class="profile-card">
+      <div class="avatar-circle avatar-lg" id="profil-avatar">G</div>
+      <h3 id="profil-nama">-</h3>
+      <p id="profil-email" class="muted">-</p>
+      <p id="profil-peran" class="role-badge">-</p>
+    </div>
+    <form id="profil-form">
+      <div class="field"><label>Nama Lengkap</label><input type="text" id="p-nama"></div>
+      <div class="field"><label>NIP</label><input type="text" id="p-nip" placeholder="Opsional"></div>
+      <div class="field"><label>NUPTK</label><input type="text" id="p-nuptk" placeholder="Opsional"></div>
+      <div class="field"><label>No. HP</label><input type="text" id="p-hp" placeholder="Opsional"></div>
+      <div class="field"><label>Alamat</label><textarea id="p-alamat" rows="2" placeholder="Opsional"></textarea></div>
+      <button type="submit" class="btn-primary">SIMPAN PROFIL</button>
+    </form>
+  </main>
+
+  <!-- Halaman: Dokumen Saya (kerangka awal) -->
+  <main id="page-dokumen" class="page">
+    <div class="empty-state">
+      <p class="empty-icon">📁</p>
+      <p>Belum ada dokumen.</p>
+      <p class="muted small">Fitur upload &amp; kelola dokumen dibangun di tahap berikutnya.</p>
+    </div>
+  </main>
+
+  <!-- Halaman: Pengaturan -->
+  <main id="page-pengaturan" class="page">
+    <div class="settings-group">
+      <p class="settings-label">AKUN</p>
+      <button class="settings-item" id="btn-ubah-password">Ubah Password <span>›</span></button>
+    </div>
+    <div class="settings-group">
+      <p class="settings-label">LAINNYA</p>
+      <div class="settings-item static">Versi Aplikasi <span class="muted">v0.1 Pondasi</span></div>
+    </div>
+    <button class="btn-outline-danger" id="btn-logout">Keluar</button>
+  </main>
+
+  <!-- Halaman: Daftar Chat (DUMMY - belum tersambung ke HP lain) -->
+  <main id="page-chat" class="page">
+    <p class="dummy-note">⚠️ Mode contoh: pesan yang kamu kirim hanya tersimpan di HP ini, belum terkirim ke HP lain.</p>
+    <div class="chat-tabs">
+      <button class="chat-tab active" data-filter="semua">Semua</button>
+      <button class="chat-tab" data-filter="pribadi">Pribadi</button>
+      <button class="chat-tab" data-filter="grup">Grup</button>
+    </div>
+    <div id="chat-list" class="chat-list"></div>
+  </main>
+
+  <!-- Halaman: Detail Percakapan -->
+  <main id="page-chat-detail" class="page">
+    <div class="chat-detail-header">
+      <button class="icon-btn dark" id="btn-chat-back">←</button>
+      <div class="avatar-circle" id="cd-avatar">?</div>
+      <div>
+        <p class="cd-name" id="cd-name">-</p>
+        <p class="cd-status muted small">Mode contoh (offline)</p>
+      </div>
+    </div>
+    <div id="chat-messages" class="chat-messages"></div>
+    <form id="chat-send-form" class="chat-input-bar">
+      <input type="text" id="chat-input" placeholder="Tulis pesan..." autocomplete="off">
+      <button type="submit" class="btn-send">➤</button>
+    </form>
+  </main>
+
+  <!-- Halaman: Komunitas - daftar kelas (untuk Guru/Admin/Kepala Sekolah) -->
+  <main id="page-komunitas-list" class="page">
+    <p class="dummy-note">⚠️ Mode contoh: isi diskusi masih data contoh, belum tersambung ke HP lain.</p>
+    <p class="muted small" style="margin-bottom:10px;">Pilih kelas untuk membuka komunitasnya:</p>
+    <div id="kelas-list" class="chat-list"></div>
+  </main>
+
+  <!-- Halaman: Komunitas - feed diskusi 1 kelas -->
+  <main id="page-komunitas-feed" class="page">
+    <p class="dummy-note">⚠️ Mode contoh: pesan yang kamu kirim hanya tersimpan di HP ini.</p>
+    <div id="komunitas-posts" class="komunitas-posts"></div>
+    <form id="komunitas-send-form" class="chat-input-bar">
+      <input type="text" id="komunitas-input" placeholder="Tulis sesuatu ke komunitas..." autocomplete="off">
+      <button type="submit" class="btn-send">➤</button>
+    </form>
+  </main>
+
+  <!-- Halaman placeholder untuk fitur yang belum dibangun -->
+  <main id="page-soon" class="page">
+    <div class="empty-state">
+      <p class="empty-icon">🚧</p>
+      <p>Fitur ini sedang dibangun.</p>
+      <p class="muted small">Kita fokuskan dulu fondasi aplikasinya.</p>
+    </div>
+  </main>
+
+  <!-- Bottom Navigation -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-page="dashboard"><span>🏠</span>Beranda</button>
+    <button class="nav-item" data-page="chat"><span>💬</span>Chat</button>
+    <button class="nav-item" data-page="soon"><span>📢</span>Pengumuman</button>
+    <button class="nav-item" data-page="profil"><span>👤</span>Profil</button>
+  </nav>
+</section>
+
+<div id="toast" class="toast"></div>
+
+<!-- ====== FIREBASE (online) ====== -->
+<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDkVmu88a5N37TMC02InBjBRxG6Cu8Jguw",
+    authDomain: "tbr1-digital.firebaseapp.com",
+    projectId: "tbr1-digital",
+    storageBucket: "tbr1-digital.firebasestorage.app",
+    messagingSenderId: "533823962588",
+    appId: "1:533823962588:web:b4d84351a7f76b12856319"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+</script>
+
+<script>
+/* ============================================================
+   TBR1 DIGITAL - app.js
+   Data akun & profil tersimpan ONLINE lewat Firebase (Auth + Firestore).
+   Chat & Komunitas masih mode contoh lokal (belum dimigrasi).
+   ============================================================ */
+
+/* Fix tinggi layar untuk WebView Android (Acode dkk) - 100vh sering salah hitung
+   karena ada address bar, jadi kita hitung manual pakai window.innerHeight */
+function setRealVH(){
+  document.documentElement.style.setProperty('--vh', (window.innerHeight * 0.01) + 'px');
+}
+setRealVH();
+window.addEventListener('resize', setRealVH);
+window.addEventListener('orientationchange', setRealVH);
+
+let currentProfile = null;  // cache data profil dari Firestore (termasuk uid)
+let authMode = 'login';     // 'login' atau 'daftar' - dipilih manual via toggle
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------- Helper akun (sekarang dari Firebase, bukan localStorage) ---------- */
+function getAccount(){
+  return currentProfile;
+}
+function loadProfileFromFirestore(uid){
+  return db.collection('users').doc(uid).get().then(doc => doc.exists ? doc.data() : null);
+}
+function saveProfileToFirestore(uid, data){
+  return db.collection('users').doc(uid).set(data, { merge: true });
+}
+
+/* ---------- Terjemahkan error Firebase ke Bahasa Indonesia ---------- */
+function terjemahErrorFirebase(err){
+  const kode = err && err.code;
+  const map = {
+    'auth/email-already-in-use': 'Email ini sudah terdaftar. Coba Masuk saja.',
+    'auth/invalid-email': 'Format email tidak valid.',
+    'auth/weak-password': 'Password terlalu lemah, minimal 6 karakter.',
+    'auth/user-not-found': 'Akun dengan email ini belum terdaftar.',
+    'auth/wrong-password': 'Email atau password salah.',
+    'auth/invalid-credential': 'Email atau password salah.',
+    'auth/too-many-requests': 'Terlalu banyak percobaan. Coba lagi beberapa saat.',
+    'auth/network-request-failed': 'Tidak ada koneksi internet. Cek jaringan HP kamu.',
+    'auth/requires-recent-login': 'Demi keamanan, silakan Keluar lalu Masuk lagi sebelum mengubah password.'
+  };
+  return map[kode] || 'Terjadi kesalahan, coba lagi. (' + kode + ')';
+}
+
+/* ---------- Toast notifikasi kecil ---------- */
+let toastTimer;
+function showToast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ---------- Navigasi antar SCREEN (splash / login / app) ---------- */
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+
+/* ---------- Navigasi antar PAGE di dalam app shell ---------- */
+const pageTitles = {
+  dashboard: 'Beranda',
+  profil: 'Profil Saya',
+  dokumen: 'Dokumen Saya',
+  pengaturan: 'Pengaturan',
+  chat: 'Chat',
+  'komunitas-list': 'Komunitas',
+  soon: 'Segera Hadir'
+};
+function showPage(pageName){
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  $('page-' + pageName).classList.add('active');
+  $('header-title').textContent = pageTitles[pageName] || '';
+
+  // tombol back muncul kalau bukan dashboard
+  $('btn-back').style.visibility = (pageName === 'dashboard') ? 'hidden' : 'visible';
+
+  // update bottom nav aktif (kalau ada yang cocok)
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.toggle('active', n.dataset.page === pageName);
+  });
+
+  // halaman detail chat punya header sendiri, sembunyikan header utama
+  document.querySelector('.app-header').style.display =
+    (pageName === 'chat-detail') ? 'none' : 'flex';
+
+  if(pageName === 'profil') fillProfileForm();
+  if(pageName === 'chat'){
+    document.querySelectorAll('.chat-tab').forEach(b => b.classList.toggle('active', b.dataset.filter === 'semua'));
+    renderChatList('semua');
+  }
+}
+
+/* ---------- Isi header dashboard & avatar dari data akun ---------- */
+function refreshGreeting(){
+  const acc = getAccount();
+  if(!acc) return;
+  const nama = acc.nama || 'Guru';
+  const initial = nama.trim().charAt(0).toUpperCase() || 'G';
+  $('greet-name').textContent = nama.split(' ')[0];
+  $('greet-avatar').textContent = initial;
+
+  let roleText = ROLE_LABEL[acc.peran] || '';
+  if(acc.peran === 'wali_murid' && acc.kelas) roleText += ' \u2022 ' + acc.kelas;
+  $('greet-role').textContent = roleText || 'Selamat datang kembali';
+}
+
+function applyRoleUI(){
+  const acc = getAccount();
+  if(!acc) return;
+  const dokumenCard = document.querySelector('.menu-card[data-page="dokumen"]');
+  if(dokumenCard){
+    dokumenCard.style.display = (acc.peran === 'wali_murid') ? 'none' : 'flex';
+  }
+}
+
+/* ---------- Halaman Profil: isi form dari data tersimpan ---------- */
+function fillProfileForm(){
+  const acc = getAccount();
+  if(!acc) return;
+  $('profil-nama').textContent = acc.nama || '-';
+  $('profil-email').textContent = acc.email || '-';
+  $('profil-avatar').textContent = (acc.nama || 'G').trim().charAt(0).toUpperCase();
+
+  let roleText = ROLE_LABEL[acc.peran] || '-';
+  if(acc.peran === 'wali_murid' && acc.kelas) roleText += ' \u2022 ' + acc.kelas;
+  $('profil-peran').textContent = roleText;
+
+  $('p-nama').value = acc.nama || '';
+  $('p-nip').value = acc.nip || '';
+  $('p-nuptk').value = acc.nuptk || '';
+  $('p-hp').value = acc.hp || '';
+  $('p-alamat').value = acc.alamat || '';
+}
+
+/* ============================================================
+   AUTH: mode SETUP (belum ada akun) vs mode LOGIN (sudah ada)
+   ============================================================ */
+const ROLE_LABEL = {
+  guru: 'Guru',
+  wali_murid: 'Wali Murid',
+  admin: 'Admin / Tata Usaha',
+  kepala_sekolah: 'Kepala Sekolah'
+};
+
+function setupAuthScreen(){
+  if(authMode === 'daftar'){
+    $('auth-title').textContent = 'Buat Akun';
+    $('auth-desc').textContent = 'Daftar untuk mulai memakai TBR1 Digital.';
+    $('field-nama').classList.remove('hidden');
+    $('field-peran').classList.remove('hidden');
+    $('field-kelas').classList.add('hidden'); // baru muncul kalau peran = wali murid
+    $('auth-submit-btn').textContent = 'DAFTAR & MASUK';
+    $('forgot-link-wrap').classList.add('hidden');
+    $('auth-toggle-text').textContent = 'Sudah punya akun?';
+    $('btn-toggle-auth').textContent = 'Masuk di sini';
+  } else {
+    $('auth-title').textContent = 'Masuk';
+    $('auth-desc').textContent = 'Masuk dengan akun TBR1 Digital kamu.';
+    $('field-nama').classList.add('hidden');
+    $('field-peran').classList.add('hidden');
+    $('field-kelas').classList.add('hidden');
+    $('auth-submit-btn').textContent = 'MASUK';
+    $('forgot-link-wrap').classList.remove('hidden');
+    $('auth-toggle-text').textContent = 'Belum punya akun?';
+    $('btn-toggle-auth').textContent = 'Daftar di sini';
+  }
+  $('auth-error').classList.add('hidden');
+  $('auth-form').reset();
+}
+
+function toggleAuthMode(){
+  authMode = (authMode === 'login') ? 'daftar' : 'login';
+  setupAuthScreen();
+}
+
+function handleAuthSubmit(e){
+  e.preventDefault();
+  const email = $('input-email').value.trim();
+  const password = $('input-password').value;
+  const errEl = $('auth-error');
+  const btn = $('auth-submit-btn');
+  errEl.classList.add('hidden');
+
+  if(authMode === 'daftar'){
+    // ---- Mode DAFTAR ----
+    const nama = $('input-nama').value.trim();
+    const peran = $('input-peran').value;
+    const kelas = $('input-kelas').value;
+
+    if(!nama || !email || password.length < 6){
+      errEl.textContent = 'Lengkapi nama, email, dan password minimal 6 karakter.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    if(!peran){
+      errEl.textContent = 'Pilih peran kamu dulu ya.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    if(peran === 'wali_murid' && !kelas){
+      errEl.textContent = 'Pilih kelas anak kamu.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    btn.disabled = true; btn.textContent = 'MEMPROSES...';
+    auth.createUserWithEmailAndPassword(email, password)
+      .then(cred => {
+        const profile = { nama, email, peran, kelas: peran === 'wali_murid' ? kelas : null, nip:'', nuptk:'', hp:'', alamat:'' };
+        return saveProfileToFirestore(cred.user.uid, profile).then(() => {
+          currentProfile = { uid: cred.user.uid, ...profile };
+        });
+      })
+      .then(() => {
+        enterApp();
+        showToast('Akun berhasil dibuat. Selamat datang, ' + nama + '!');
+      })
+      .catch(err => {
+        errEl.textContent = terjemahErrorFirebase(err);
+        errEl.classList.remove('hidden');
+      })
+      .finally(() => { btn.disabled = false; btn.textContent = 'DAFTAR & MASUK'; });
+
+  } else {
+    // ---- Mode MASUK ----
+    if(!email || !password){
+      errEl.textContent = 'Isi email dan password dulu.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'MEMPROSES...';
+    auth.signInWithEmailAndPassword(email, password)
+      .then(cred => loadProfileFromFirestore(cred.user.uid).then(profile => {
+        currentProfile = { uid: cred.user.uid, ...(profile || {}) };
+      }))
+      .then(() => {
+        enterApp();
+        showToast('Selamat datang kembali, ' + (currentProfile.nama || '') + '!');
+      })
+      .catch(err => {
+        errEl.textContent = terjemahErrorFirebase(err);
+        errEl.classList.remove('hidden');
+      })
+      .finally(() => { btn.disabled = false; btn.textContent = authMode === 'daftar' ? 'DAFTAR & MASUK' : 'MASUK'; });
+  }
+}
+
+function showForgotBlock(){
+  $('login-block').classList.add('hidden');
+  $('forgot-block').classList.remove('hidden');
+  $('forgot-error').classList.add('hidden');
+  $('forgot-form').reset();
+}
+
+function showLoginBlock(){
+  $('forgot-block').classList.add('hidden');
+  $('login-block').classList.remove('hidden');
+}
+
+function handleForgotSubmit(e){
+  e.preventDefault();
+  const errEl = $('forgot-error');
+  const okEl = $('forgot-success');
+  const btn = $('forgot-submit-btn');
+  const email = $('fp-email').value.trim();
+  errEl.classList.add('hidden');
+  okEl.classList.add('hidden');
+
+  if(!email){
+    errEl.textContent = 'Masukkan email dulu.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'MENGIRIM...';
+  auth.sendPasswordResetEmail(email)
+    .then(() => {
+      okEl.textContent = 'Link reset password sudah dikirim. Cek inbox/spam di email kamu.';
+      okEl.classList.remove('hidden');
+      $('forgot-form').reset();
+    })
+    .catch(err => {
+      errEl.textContent = terjemahErrorFirebase(err);
+      errEl.classList.remove('hidden');
+    })
+    .finally(() => { btn.disabled = false; btn.textContent = 'KIRIM LINK RESET'; });
+}
+
+/* ---------- Masuk ke app shell ---------- */
+function enterApp(){
+  showScreen('screen-app');
+  $('screen-app').classList.add('active');
+  refreshGreeting();
+  applyRoleUI();
+  showPage('dashboard');
+}
+
+/* ---------- Logout ---------- */
+function handleLogout(){
+  auth.signOut().then(() => {
+    currentProfile = null;
+    authMode = 'login';
+    showLoginBlock();
+    setupAuthScreen();
+    showScreen('screen-login');
+  });
+}
+
+/* ---------- Simpan perubahan profil ---------- */
+function handleProfilSubmit(e){
+  e.preventDefault();
+  const acc = getAccount();
+  if(!acc) return;
+  const btn = e.target.querySelector('button[type="submit"]');
+
+  const updated = {
+    nama: $('p-nama').value.trim() || acc.nama,
+    nip: $('p-nip').value.trim(),
+    nuptk: $('p-nuptk').value.trim(),
+    hp: $('p-hp').value.trim(),
+    alamat: $('p-alamat').value.trim()
+  };
+
+  btn.disabled = true; btn.textContent = 'MENYIMPAN...';
+  saveProfileToFirestore(acc.uid, updated)
+    .then(() => {
+      Object.assign(currentProfile, updated);
+      refreshGreeting();
+      fillProfileForm();
+      showToast('Profil berhasil disimpan.');
+    })
+    .catch(err => showToast(terjemahErrorFirebase(err)))
+    .finally(() => { btn.disabled = false; btn.textContent = 'SIMPAN PROFIL'; });
+}
+
+/* ---------- Ubah password (lewat Firebase, perlu re-autentikasi) ---------- */
+function handleUbahPassword(){
+  const acc = getAccount();
+  if(!acc) return;
+  const lama = prompt('Masukkan password lama:');
+  if(lama === null) return;
+  const baru = prompt('Masukkan password baru (min. 6 karakter):');
+  if(baru === null) return;
+  if(baru.length < 6){
+    alert('Password baru minimal 6 karakter.');
+    return;
+  }
+
+  const cred = firebase.auth.EmailAuthProvider.credential(acc.email, lama);
+  auth.currentUser.reauthenticateWithCredential(cred)
+    .then(() => auth.currentUser.updatePassword(baru))
+    .then(() => showToast('Password berhasil diubah.'))
+    .catch(err => alert(terjemahErrorFirebase(err)));
+}
+
+/* ============================================================
+   CHAT (DUMMY) - belum tersambung ke HP lain, hanya contoh + lokal
+   ============================================================ */
+const KEY_CHAT_EXTRA = 'tbr1_chat_extra'; // pesan yang diketik user, per thread
+
+// Data awal contoh percakapan (statis, bukan data sungguhan)
+const CHAT_THREADS = [
+  { id:'t1', nama:'Pak Budi', tipe:'pribadi', warna:'#5A2295',
+    pesan:[
+      {dari:'them', teks:'Baik Pak, terima kasih informasinya', waktu:'09:41'}
+    ]},
+  { id:'t2', nama:'Ibu Siti', tipe:'pribadi', warna:'#B0507A',
+    pesan:[
+      {dari:'them', teks:'Oke, sampai jumpa besok', waktu:'08:30'}
+    ]},
+  { id:'t3', nama:'Grup Guru', tipe:'grup', warna:'#3C8A6E',
+    pesan:[
+      {dari:'them', teks:'Rapat sore ini di ruang guru', waktu:'08:12'}
+    ]},
+  { id:'t4', nama:'Grup TU', tipe:'grup', warna:'#B08A2E',
+    pesan:[
+      {dari:'them', teks:'Data sudah saya kirim', waktu:'06:50'}
+    ]},
+  { id:'t5', nama:'Pak Kepala Sekolah', tipe:'pribadi', warna:'#5A2295',
+    pesan:[
+      {dari:'them', teks:'Tolong siapkan laporan bulanan', waktu:'Kemarin'}
+    ]},
+];
+
+let activeChatId = null;
+
+function getChatExtra(){
+  const raw = localStorage.getItem(KEY_CHAT_EXTRA);
+  return raw ? JSON.parse(raw) : {};
+}
+function saveChatExtra(data){
+  localStorage.setItem(KEY_CHAT_EXTRA, JSON.stringify(data));
+}
+function getThreadMessages(threadId){
+  const thread = CHAT_THREADS.find(t => t.id === threadId);
+  const extra = getChatExtra()[threadId] || [];
+  return [...(thread ? thread.pesan : []), ...extra];
+}
+function initial(nama){
+  return nama.trim().charAt(0).toUpperCase();
+}
+
+function renderChatList(filter){
+  filter = filter || 'semua';
+  const list = $('chat-list');
+  list.innerHTML = '';
+  const items = CHAT_THREADS.filter(t => filter === 'semua' || t.tipe === filter);
+
+  items.forEach(t => {
+    const msgs = getThreadMessages(t.id);
+    const last = msgs[msgs.length - 1];
+    const btn = document.createElement('button');
+    btn.className = 'chat-list-item';
+    btn.innerHTML = `
+      <div class="avatar-circle" style="background:${t.warna}">${initial(t.nama)}</div>
+      <div class="chat-list-info">
+        <div class="chat-list-top">
+          <span class="chat-list-name">${t.nama}</span>
+          <span class="chat-list-time">${last ? last.waktu : ''}</span>
+        </div>
+        <p class="chat-list-preview">${last ? last.teks : 'Belum ada pesan'}</p>
+      </div>`;
+    btn.addEventListener('click', () => openChatDetail(t.id));
+    list.appendChild(btn);
+  });
+}
+
+function openChatDetail(threadId){
+  activeChatId = threadId;
+  const thread = CHAT_THREADS.find(t => t.id === threadId);
+  if(!thread) return;
+  $('cd-name').textContent = thread.nama;
+  $('cd-avatar').textContent = initial(thread.nama);
+  $('cd-avatar').style.background = thread.warna;
+  renderChatMessages();
+  showPage('chat-detail');
+  $('header-title').textContent = thread.nama;
+}
+
+function renderChatMessages(){
+  const box = $('chat-messages');
+  box.innerHTML = '';
+  const msgs = getThreadMessages(activeChatId);
+  msgs.forEach(m => {
+    const div = document.createElement('div');
+    div.className = 'bubble ' + (m.dari === 'me' ? 'bubble-me' : 'bubble-them');
+    div.innerHTML = m.teks.replace(/</g,'&lt;') + '<span class="bubble-time">' + m.waktu + '</span>';
+    box.appendChild(div);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+function handleSendChat(e){
+  e.preventDefault();
+  const input = $('chat-input');
+  const teks = input.value.trim();
+  if(!teks || !activeChatId) return;
+
+  const extra = getChatExtra();
+  if(!extra[activeChatId]) extra[activeChatId] = [];
+  const jam = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+  extra[activeChatId].push({ dari:'me', teks, waktu: jam });
+  saveChatExtra(extra);
+
+  input.value = '';
+  renderChatMessages();
+  renderChatList(); // update preview pesan terakhir di list
+}
+
+/* ============================================================
+   KOMUNITAS (DUMMY) - forum per kelas, belum tersambung antar HP
+   ============================================================ */
+const KEY_KOMUNITAS_EXTRA = 'tbr1_komunitas_extra';
+
+const KOMUNITAS_POSTS = {
+  'Kelas 1': [{ nama:'Bu Ida', peran:'Wali Kelas', teks:'Besok anak-anak bawa perlengkapan menggambar ya, Bu/Pak.', waktu:'Kemarin' }],
+  'Kelas 2': [{ nama:'Pak Joko', peran:'Wali Kelas', teks:'Ulangan Matematika digeser jadi hari Kamis.', waktu:'Kemarin' }],
+  'Kelas 3': [{ nama:'Bu Rina', peran:'Wali Kelas', teks:'Terima kasih untuk orang tua yang sudah ikut kerja bakti kemarin.', waktu:'2 hari lalu' }],
+  'Kelas 4': [{ nama:'Pak Aji', peran:'Wali Kelas', teks:'Mohon lunasi infaq study tour paling lambat Jumat ini.', waktu:'2 hari lalu' }],
+  'Kelas 5': [{ nama:'Bu Wati', peran:'Wali Kelas', teks:'Foto kegiatan class meeting sudah dibagikan di grup, silakan dicek.', waktu:'3 hari lalu' }],
+  'Kelas 6': [{ nama:'Pak Kepala Sekolah', peran:'Kepala Sekolah', teks:'Persiapan ujian kelas 6 dimulai minggu depan, mohon dukungan orang tua.', waktu:'3 hari lalu' }],
+};
+
+let activeKelas = null;
+
+function getKomunitasExtra(){
+  const raw = localStorage.getItem(KEY_KOMUNITAS_EXTRA);
+  return raw ? JSON.parse(raw) : {};
+}
+function saveKomunitasExtra(data){
+  localStorage.setItem(KEY_KOMUNITAS_EXTRA, JSON.stringify(data));
+}
+function getKelasPosts(kelas){
+  const extra = getKomunitasExtra()[kelas] || [];
+  return [...(KOMUNITAS_POSTS[kelas] || []), ...extra];
+}
+
+// Menu Komunitas: Wali Murid langsung ke kelasnya, yang lain pilih dulu
+function goToKomunitas(){
+  const acc = getAccount();
+  if(acc && acc.peran === 'wali_murid' && acc.kelas){
+    openKomunitasFeed(acc.kelas);
+  } else {
+    renderKelasList();
+    showPage('komunitas-list');
+  }
+}
+
+function renderKelasList(){
+  const list = $('kelas-list');
+  list.innerHTML = '';
+  Object.keys(KOMUNITAS_POSTS).forEach(kelas => {
+    const posts = getKelasPosts(kelas);
+    const last = posts[posts.length - 1];
+    const btn = document.createElement('button');
+    btn.className = 'chat-list-item';
+    btn.innerHTML = `
+      <div class="avatar-circle" style="background:var(--purple-600)">${kelas.replace('Kelas ','')}</div>
+      <div class="chat-list-info">
+        <div class="chat-list-top">
+          <span class="chat-list-name">${kelas}</span>
+          <span class="chat-list-time">${last ? last.waktu : ''}</span>
+        </div>
+        <p class="chat-list-preview">${last ? last.teks : 'Belum ada diskusi'}</p>
+      </div>`;
+    btn.addEventListener('click', () => openKomunitasFeed(kelas));
+    list.appendChild(btn);
+  });
+}
+
+function openKomunitasFeed(kelas){
+  activeKelas = kelas;
+  renderKomunitasPosts();
+  showPage('komunitas-feed');
+  $('header-title').textContent = 'Komunitas ' + kelas;
+}
+
+function renderKomunitasPosts(){
+  const box = $('komunitas-posts');
+  box.innerHTML = '';
+  getKelasPosts(activeKelas).forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'komunitas-post';
+    div.innerHTML = `
+      <div class="komunitas-post-top">
+        <span><span class="komunitas-post-nama">${p.nama}</span><span class="komunitas-post-role">${p.peran}</span></span>
+        <span class="komunitas-post-time">${p.waktu}</span>
+      </div>
+      <p class="komunitas-post-text">${p.teks.replace(/</g,'&lt;')}</p>`;
+    box.appendChild(div);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+function handleKirimKomunitas(e){
+  e.preventDefault();
+  const input = $('komunitas-input');
+  const teks = input.value.trim();
+  if(!teks || !activeKelas) return;
+
+  const acc = getAccount();
+  const extra = getKomunitasExtra();
+  if(!extra[activeKelas]) extra[activeKelas] = [];
+  const jam = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+  extra[activeKelas].push({ nama: acc.nama, peran: ROLE_LABEL[acc.peran] || '', teks, waktu: jam });
+  saveKomunitasExtra(extra);
+
+  input.value = '';
+  renderKomunitasPosts();
+}
+
+/* ---------- Tombol back di header: pintar sesuai halaman aktif ---------- */
+function handleBackClick(){
+  const activePage = document.querySelector('.page.active');
+  const id = activePage ? activePage.id.replace('page-','') : 'dashboard';
+  if(id === 'komunitas-feed'){
+    const acc = getAccount();
+    if(acc && acc.peran !== 'wali_murid'){
+      showPage('komunitas-list');
+      return;
+    }
+  }
+  showPage('dashboard');
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+window.addEventListener('DOMContentLoaded', () => {
+  setRealVH();
+  setupAuthScreen();
+
+  // ---- Splash: tunggu Firebase cek status login DAN waktu minimal 1.5 detik ----
+  let splashTimerDone = false;
+  let authChecked = false;
+  let pendingUser = undefined;
+
+  function proceedFromSplash(){
+    if(!splashTimerDone || !authChecked) return; // tunggu keduanya siap
+    if(pendingUser){
+      loadProfileFromFirestore(pendingUser.uid).then(profile => {
+        if(profile){
+          currentProfile = { uid: pendingUser.uid, ...profile };
+          enterApp();
+        } else {
+          // Ada login Firebase tapi data profil tidak ketemu -> balik ke login
+          authMode = 'login';
+          setupAuthScreen();
+          showScreen('screen-login');
+        }
+      }).catch(() => {
+        authMode = 'login';
+        setupAuthScreen();
+        showScreen('screen-login');
+      });
+    } else {
+      authMode = 'login';
+      setupAuthScreen();
+      showScreen('screen-login');
+    }
+  }
+
+  setTimeout(() => { splashTimerDone = true; proceedFromSplash(); }, 1500);
+
+  auth.onAuthStateChanged(user => {
+    authChecked = true;
+    pendingUser = user;
+    proceedFromSplash();
+  });
+
+  // Toggle Masuk / Daftar
+  $('btn-toggle-auth').addEventListener('click', toggleAuthMode);
+
+  // Form auth (login / daftar)
+  $('auth-form').addEventListener('submit', handleAuthSubmit);
+
+  // Lupa Password
+  $('btn-forgot').addEventListener('click', showForgotBlock);
+  $('btn-back-to-login').addEventListener('click', showLoginBlock);
+  $('forgot-form').addEventListener('submit', handleForgotSubmit);
+
+  // Klik menu di dashboard
+  document.querySelectorAll('.menu-card').forEach(card => {
+    card.addEventListener('click', () => {
+      if(card.dataset.page === 'komunitas'){
+        goToKomunitas();
+      } else {
+        showPage(card.dataset.page);
+      }
+    });
+  });
+
+  // Klik bottom nav
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => showPage(item.dataset.page));
+  });
+
+  // Tombol back di header -> pintar sesuai halaman aktif
+  $('btn-back').addEventListener('click', handleBackClick);
+  $('btn-back').style.visibility = 'visible';
+
+  // Daftar akun: munculkan pilihan Kelas kalau peran = Wali Murid
+  $('input-peran').addEventListener('change', (e) => {
+    if(e.target.value === 'wali_murid'){
+      $('field-kelas').classList.remove('hidden');
+    } else {
+      $('field-kelas').classList.add('hidden');
+      $('input-kelas').value = '';
+    }
+  });
+
+  // Notif bell (placeholder untuk sekarang)
+  $('btn-notif').addEventListener('click', () => showToast('Belum ada notifikasi baru.'));
+
+  // Form profil
+  $('profil-form').addEventListener('submit', handleProfilSubmit);
+
+  // Pengaturan
+  $('btn-ubah-password').addEventListener('click', handleUbahPassword);
+  $('btn-logout').addEventListener('click', handleLogout);
+
+  // Chat: tab filter
+  document.querySelectorAll('.chat-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.chat-tab').forEach(b => b.classList.remove('active'));
+      tab.classList.add('active');
+      renderChatList(tab.dataset.filter);
+    });
+  });
+
+  // Chat: tombol back di halaman detail -> balik ke daftar chat
+  $('btn-chat-back').addEventListener('click', () => showPage('chat'));
+
+  // Chat: kirim pesan (dummy, tersimpan lokal saja)
+  $('chat-send-form').addEventListener('submit', handleSendChat);
+
+  // Komunitas: kirim postingan (dummy, tersimpan lokal saja)
+  $('komunitas-send-form').addEventListener('submit', handleKirimKomunitas);
+});
+
+</script>
+</body>
+</html>
