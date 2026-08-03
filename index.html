@@ -270,6 +270,30 @@ body{
 .chat-tab.active{background:var(--purple-700);color:var(--white);}
 
 .chat-list{display:flex;flex-direction:column;gap:2px;}
+.btn-buat-grup{
+  width:100%;
+  padding:11px;
+  background:var(--purple-100);
+  color:var(--purple-700);
+  border:1px dashed var(--purple-600);
+  border-radius:var(--radius-sm);
+  font-weight:700;
+  font-size:13px;
+  cursor:pointer;
+}
+.grup-anggota-list{
+  display:flex;flex-direction:column;gap:2px;
+  max-height:50vh;overflow-y:auto;
+}
+.grup-anggota-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 6px;
+  border-bottom:1px solid var(--purple-050);
+}
+.grup-anggota-item input[type="checkbox"]{
+  width:18px;height:18px;accent-color:var(--purple-700);
+}
+.grup-anggota-item label{font-size:13.5px;color:var(--gray-900);}
 .chat-list-item{
   display:flex;align-items:center;gap:12px;
   padding:12px 6px;
@@ -603,8 +627,22 @@ body{
 
   <!-- Halaman: Daftar Chat (khusus Guru/Admin/Kepala Sekolah) -->
   <main id="page-chat" class="page">
-    <p class="muted small" style="margin-bottom:10px;">Kontak staf sekolah:</p>
+    <button class="btn-buat-grup" id="btn-buat-grup">➕ Buat Grup Baru</button>
+    <p class="muted small" style="margin:10px 0;">Kontak staf sekolah:</p>
     <div id="chat-list" class="chat-list"></div>
+  </main>
+
+  <!-- Halaman: Buat Grup Baru -->
+  <main id="page-buat-grup" class="page">
+    <form id="buat-grup-form">
+      <div class="field">
+        <label>Nama Grup</label>
+        <input type="text" id="grup-nama" placeholder="Contoh: Grup Kurikulum" required>
+      </div>
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--gray-500);margin-bottom:6px;">Pilih Anggota</label>
+      <div id="grup-anggota-list" class="grup-anggota-list"></div>
+      <button type="submit" class="btn-primary" style="margin-top:14px;">BUAT GRUP</button>
+    </form>
   </main>
 
   <!-- Halaman: Detail Percakapan -->
@@ -751,6 +789,7 @@ const pageTitles = {
   dokumen: 'Dokumen Saya',
   pengaturan: 'Pengaturan',
   chat: 'Chat',
+  'buat-grup': 'Buat Grup Baru',
   'komunitas-list': 'Komunitas',
   soon: 'Segera Hadir'
 };
@@ -1152,9 +1191,30 @@ function renderChatList(){
       </div>
       <p class="chat-list-preview" id="pv-text-${GRUP_STAF_ID}">Memuat...</p>
     </div>`;
-  grupBtn.addEventListener('click', () => openChatDetail({ nama: 'Grup Guru & Staf' }, true));
+  grupBtn.addEventListener('click', () => openChatDetail({ nama: 'Grup Guru & Staf' }, true, GRUP_STAF_ID));
   list.appendChild(grupBtn);
   muatPreview(GRUP_STAF_ID);
+
+  // --- Grup-grup custom buatan sendiri/orang lain ---
+  db.collection('groups').where('members', 'array-contains', acc.uid).get().then(gsnap => {
+    gsnap.forEach(gdoc => {
+      const g = gdoc.data();
+      const btn = document.createElement('button');
+      btn.className = 'chat-list-item';
+      btn.innerHTML = `
+        <div class="avatar-circle" style="background:var(--purple-700)">👥</div>
+        <div class="chat-list-info">
+          <div class="chat-list-top">
+            <span class="chat-list-name-wrap"><span class="chat-list-name">${g.name || '(Grup tanpa nama)'}</span><span class="unread-dot" id="pv-dot-${gdoc.id}"></span></span>
+            <span class="chat-list-time" id="pv-time-${gdoc.id}"></span>
+          </div>
+          <p class="chat-list-preview" id="pv-text-${gdoc.id}">Memuat...</p>
+        </div>`;
+      btn.addEventListener('click', () => openChatDetail({ nama: g.name }, true, gdoc.id));
+      list.appendChild(btn);
+      muatPreview(gdoc.id);
+    });
+  }).catch(() => {});
 
   const loadingEl = document.createElement('p');
   loadingEl.className = 'muted small';
@@ -1194,6 +1254,64 @@ function renderChatList(){
   });
 }
 
+/* ---------- Buat Grup Baru ---------- */
+function goToBuatGrup(){
+  const acc = getAccount();
+  const box = $('grup-anggota-list');
+  box.innerHTML = '<p class="muted small">Memuat daftar staf...</p>';
+  $('grup-nama').value = '';
+  showPage('buat-grup');
+
+  db.collection('users').get().then(snap => {
+    box.innerHTML = '';
+    let ada = false;
+    snap.forEach(doc => {
+      const u = doc.data();
+      if(doc.id !== acc.uid && u.peran !== 'wali_murid'){
+        ada = true;
+        const row = document.createElement('div');
+        row.className = 'grup-anggota-item';
+        row.innerHTML = `
+          <input type="checkbox" id="anggota-${doc.id}" value="${doc.id}">
+          <label for="anggota-${doc.id}">${u.nama || '(Tanpa nama)'} <span class="muted small">(${ROLE_LABEL[u.peran] || ''})</span></label>`;
+        box.appendChild(row);
+      }
+    });
+    if(!ada) box.innerHTML = '<p class="muted small">Belum ada staf lain yang bisa diajak.</p>';
+  }).catch(() => {
+    box.innerHTML = '<p class="muted small">Gagal memuat daftar staf.</p>';
+  });
+}
+
+function handleBuatGrupSubmit(e){
+  e.preventDefault();
+  const acc = getAccount();
+  const nama = $('grup-nama').value.trim();
+  if(!nama){ showToast('Isi nama grup dulu.'); return; }
+
+  const anggotaTerpilih = Array.from(document.querySelectorAll('#grup-anggota-list input[type="checkbox"]:checked')).map(el => el.value);
+  if(anggotaTerpilih.length === 0){ showToast('Pilih minimal 1 anggota.'); return; }
+
+  const members = [acc.uid, ...anggotaTerpilih];
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true; btn.textContent = 'MEMBUAT...';
+
+  const ref = db.collection('groups').doc(); // generate ID otomatis dulu
+  ref.set({
+    name: nama,
+    members: members,
+    createdBy: acc.uid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(() => {
+    showToast('Grup "' + nama + '" berhasil dibuat.');
+    openChatDetail({ nama: nama }, true, ref.id);
+  }).catch(() => {
+    showToast('Gagal membuat grup, cek koneksi internet.');
+  }).finally(() => {
+    btn.disabled = false; btn.textContent = 'BUAT GRUP';
+  });
+}
+
 let activeChatOtherReadAt = 0; // millis, buat centang dibaca (khusus chat 1:1)
 let unsubscribeReadStatus = null;
 
@@ -1227,16 +1345,16 @@ function perbaruiCentangDibaca(){
   });
 }
 
-function openChatDetail(kontak, isGroup){
+function openChatDetail(kontak, isGroup, customChatId){
   const acc = getAccount();
   activeChatIsGroup = !!isGroup;
   activeChatPartnerUid = isGroup ? null : kontak.uid;
-  activeChatId = isGroup ? GRUP_STAF_ID : buatChatId(acc.uid, kontak.uid);
+  activeChatId = isGroup ? (customChatId || GRUP_STAF_ID) : buatChatId(acc.uid, kontak.uid);
 
   $('cd-name').textContent = kontak.nama || '(Tanpa nama)';
   $('cd-avatar').textContent = isGroup ? '👥' : initial(kontak.nama);
   $('cd-avatar').style.background = isGroup ? 'var(--purple-800)' : 'var(--purple-600)';
-  $('cd-status').textContent = isGroup ? 'Guru, Admin & Kepala Sekolah' : (ROLE_LABEL[kontak.peran] || '');
+  $('cd-status').textContent = isGroup ? (activeChatId === GRUP_STAF_ID ? 'Guru, Admin & Kepala Sekolah' : 'Grup') : (ROLE_LABEL[kontak.peran] || '');
 
   showPage('chat-detail');
   $('header-title').textContent = kontak.nama || 'Chat';
@@ -1377,6 +1495,10 @@ function mulaiPantauChatMasuk(){
   if(!acc || acc.peran === 'wali_murid') return;
 
   pantauSatuChat(GRUP_STAF_ID);
+
+  db.collection('groups').where('members', 'array-contains', acc.uid).get().then(gsnap => {
+    gsnap.forEach(gdoc => pantauSatuChat(gdoc.id));
+  });
 
   db.collection('users').get().then(snap => {
     snap.forEach(doc => {
@@ -1541,6 +1663,10 @@ function handleBackClick(){
       return;
     }
   }
+  if(id === 'buat-grup'){
+    showPage('chat');
+    return;
+  }
   showPage('dashboard');
 }
 
@@ -1659,6 +1785,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Chat: tombol back di halaman detail -> putus listener real-time, balik ke daftar chat
   $('btn-chat-back').addEventListener('click', tutupChatDetail);
+
+  // Buat Grup Baru
+  $('btn-buat-grup').addEventListener('click', goToBuatGrup);
+  $('buat-grup-form').addEventListener('submit', handleBuatGrupSubmit);
 
   // Chat: kirim pesan (real, tersimpan di Firestore)
   $('chat-send-form').addEventListener('submit', handleSendChat);
