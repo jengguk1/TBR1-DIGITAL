@@ -435,6 +435,32 @@ body{
   border:none;font-size:16px;cursor:pointer;
   flex-shrink:0;
 }
+.btn-attach{
+  width:38px;height:38px;border-radius:50%;
+  background:var(--purple-050);color:var(--purple-700);
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;cursor:pointer;flex-shrink:0;
+}
+.chat-image-preview{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 12px;
+  background:var(--purple-050);
+  border-top:1px solid var(--purple-100);
+}
+.chat-image-preview img{
+  width:52px;height:52px;object-fit:cover;border-radius:8px;
+}
+#btn-cancel-image{
+  background:var(--white);border:1px solid var(--gray-300);
+  border-radius:50%;width:24px;height:24px;
+  cursor:pointer;font-size:12px;color:var(--gray-500);
+}
+.bubble-image{
+  display:block;
+  max-width:100%;
+  border-radius:10px;
+  margin-bottom:4px;
+}
 
 .toast{
   position:fixed;bottom:90px;left:50%;
@@ -656,7 +682,13 @@ body{
       </div>
     </div>
     <div id="chat-messages" class="chat-messages"></div>
+    <div id="chat-image-preview" class="chat-image-preview" style="display:none;">
+      <img id="chat-image-preview-img" src="" alt="preview">
+      <button type="button" id="btn-cancel-image">✕</button>
+    </div>
     <form id="chat-send-form" class="chat-input-bar">
+      <label for="chat-image-input" class="btn-attach">📷</label>
+      <input type="file" id="chat-image-input" accept="image/*" style="display:none;">
       <input type="text" id="chat-input" placeholder="Tulis pesan..." autocomplete="off">
       <button type="submit" class="btn-send">➤</button>
     </form>
@@ -1164,7 +1196,8 @@ function muatPreview(chatId){
         elText.textContent = 'Belum ada pesan';
       } else {
         const m = msgSnap.docs[0].data();
-        const teksPreview = m.deleted ? '🚫 Pesan telah dihapus' : ((m.fromName ? m.fromName + ': ' : '') + m.text);
+        let isiPesan = m.imageBase64 ? ('📷 Foto' + (m.text ? ' - ' + m.text : '')) : (m.text || '');
+        const teksPreview = m.deleted ? '🚫 Pesan telah dihapus' : ((m.fromName ? m.fromName + ': ' : '') + isiPesan);
         elText.textContent = teksPreview;
         if(elTime && m.createdAt) elTime.textContent = formatJamChat(m.createdAt.toDate());
         latestMsgPerChat[chatId] = { from: m.from, createdAtMillis: m.createdAt ? m.createdAt.toMillis() : Date.now() };
@@ -1392,7 +1425,12 @@ function openChatDetail(kontak, isGroup, customChatId){
         if(m.deleted){
           isi += '<span class="bubble-deleted">🚫 Pesan ini telah dihapus</span>';
         } else {
-          isi += (m.text || '').replace(/</g,'&lt;');
+          if(m.imageBase64){
+            isi += '<img src="' + m.imageBase64 + '" class="bubble-image" alt="foto">';
+          }
+          if(m.text){
+            isi += (m.text || '').replace(/</g,'&lt;');
+          }
           if(m.edited) isi += ' <span class="bubble-edited">(diedit)</span>';
         }
         isi += '<span class="bubble-time">' + jam + '</span>';
@@ -1439,25 +1477,79 @@ function handleHapusPesan(chatId, messageId){
   }).catch(() => showToast('Gagal menghapus pesan, cek koneksi internet.'));
 }
 
+let pendingImageBase64 = null;
+
+function handleImageSelect(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  if(!file.type.startsWith('image/')){
+    showToast('File harus berupa gambar.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX_DIM = 800; // kecilkan dulu biar hemat, cukup buat dilihat di HP
+      let w = img.width, h = img.height;
+      if(w > h && w > MAX_DIM){ h = Math.round(h * (MAX_DIM / w)); w = MAX_DIM; }
+      else if(h >= w && h > MAX_DIM){ w = Math.round(w * (MAX_DIM / h)); h = MAX_DIM; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+
+      let quality = 0.6;
+      let dataUrl = canvas.toDataURL('image/jpeg', quality);
+      while(dataUrl.length > 650000 && quality > 0.2){
+        quality -= 0.1;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      }
+      if(dataUrl.length > 650000){
+        showToast('Foto masih terlalu besar walau sudah dikompres. Coba foto lain.');
+        return;
+      }
+      pendingImageBase64 = dataUrl;
+      $('chat-image-preview-img').src = dataUrl;
+      $('chat-image-preview').style.display = 'flex';
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function batalkanGambarChat(){
+  pendingImageBase64 = null;
+  $('chat-image-input').value = '';
+  $('chat-image-preview').style.display = 'none';
+}
+
 function handleSendChat(e){
   e.preventDefault();
   const acc = getAccount();
   const input = $('chat-input');
   const teks = input.value.trim();
-  if(!teks || !activeChatId) return;
+  if(!teks && !pendingImageBase64) return;
+  if(!activeChatId) return;
 
-  input.value = '';
-  db.collection('chats').doc(activeChatId).collection('messages').add({
+  const data = {
     from: acc.uid,
     fromName: acc.nama,
     text: teks,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(() => showToast('Gagal mengirim pesan, cek koneksi internet.'));
+  };
+  if(pendingImageBase64) data.imageBase64 = pendingImageBase64;
+
+  input.value = '';
+  batalkanGambarChat();
+
+  db.collection('chats').doc(activeChatId).collection('messages').add(data)
+    .catch(() => showToast('Gagal mengirim pesan, cek koneksi internet.'));
 }
 
 function tutupChatDetail(){
   if(unsubscribeChatMessages){ unsubscribeChatMessages(); unsubscribeChatMessages = null; }
   if(unsubscribeReadStatus){ unsubscribeReadStatus(); unsubscribeReadStatus = null; }
+  batalkanGambarChat();
   showPage('chat');
   renderChatList();
 }
@@ -1792,6 +1884,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Chat: kirim pesan (real, tersimpan di Firestore)
   $('chat-send-form').addEventListener('submit', handleSendChat);
+
+  // Lampirkan foto & batal
+  $('chat-image-input').addEventListener('change', handleImageSelect);
+  $('btn-cancel-image').addEventListener('click', batalkanGambarChat);
 
   // Edit & hapus pesan sendiri (delegasi, karena bubble dibuat ulang tiap ada perubahan)
   $('chat-messages').addEventListener('click', (e) => {
