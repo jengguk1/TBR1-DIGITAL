@@ -373,6 +373,16 @@ body{
   display:flex;justify-content:flex-end;gap:10px;
   margin-top:4px;
 }
+.bubble-check{
+  font-size:11px;
+  margin-left:4px;
+  opacity:.75;
+  letter-spacing:-1px;
+}
+.bubble-check.read{
+  color:#4FC3F7;
+  opacity:1;
+}
 .bubble-edit-btn, .bubble-delete-btn{
   background:none;border:none;
   color:inherit;
@@ -1184,6 +1194,39 @@ function renderChatList(){
   });
 }
 
+let activeChatOtherReadAt = 0; // millis, buat centang dibaca (khusus chat 1:1)
+let unsubscribeReadStatus = null;
+
+function tandaiSudahDibacaFirestore(chatId, uid){
+  db.collection('chats').doc(chatId).collection('reads').doc(uid).set({
+    lastReadAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {}); // gagal diam-diam, ini cuma penanda kecil
+}
+
+function pantauStatusDibaca(chatId, otherUid){
+  if(unsubscribeReadStatus){ unsubscribeReadStatus(); unsubscribeReadStatus = null; }
+  activeChatOtherReadAt = 0;
+  if(!otherUid) return; // grup tidak pakai centang per-orang
+  unsubscribeReadStatus = db.collection('chats').doc(chatId).collection('reads').doc(otherUid)
+    .onSnapshot(doc => {
+      activeChatOtherReadAt = (doc.exists && doc.data().lastReadAt) ? doc.data().lastReadAt.toMillis() : 0;
+      perbaruiCentangDibaca();
+    }, () => {});
+}
+
+function perbaruiCentangDibaca(){
+  document.querySelectorAll('#chat-messages .bubble-check').forEach(el => {
+    const created = parseInt(el.dataset.created, 10) || 0;
+    if(created > 0 && created <= activeChatOtherReadAt){
+      el.textContent = '✓✓';
+      el.classList.add('read');
+    } else {
+      el.textContent = '✓';
+      el.classList.remove('read');
+    }
+  });
+}
+
 function openChatDetail(kontak, isGroup){
   const acc = getAccount();
   activeChatIsGroup = !!isGroup;
@@ -1198,6 +1241,8 @@ function openChatDetail(kontak, isGroup){
   showPage('chat-detail');
   $('header-title').textContent = kontak.nama || 'Chat';
   setLastSeen(activeChatId, Date.now());
+  tandaiSudahDibacaFirestore(activeChatId, acc.uid);
+  pantauStatusDibaca(activeChatId, activeChatPartnerUid);
   perbaruiBadgeGlobal();
 
   const box = $('chat-messages');
@@ -1213,12 +1258,14 @@ function openChatDetail(kontak, isGroup){
         return;
       }
       setLastSeen(activeChatId, Date.now()); // lagi buka chat ini, anggap semua sudah dibaca
+      tandaiSudahDibacaFirestore(activeChatId, acc.uid);
       perbaruiBadgeGlobal();
       snap.forEach(doc => {
         const m = doc.data();
         const isMe = m.from === acc.uid;
         const div = document.createElement('div');
         div.className = 'bubble ' + (isMe ? 'bubble-me' : 'bubble-them');
+        const createdMillis = m.createdAt ? m.createdAt.toMillis() : 0;
         const jam = m.createdAt ? formatJamChat(m.createdAt.toDate()) : '...';
         let isi = '';
         if(activeChatIsGroup && !isMe && !m.deleted){
@@ -1231,6 +1278,9 @@ function openChatDetail(kontak, isGroup){
           if(m.edited) isi += ' <span class="bubble-edited">(diedit)</span>';
         }
         isi += '<span class="bubble-time">' + jam + '</span>';
+        if(isMe && !activeChatIsGroup && !m.deleted){
+          isi += '<span class="bubble-check" data-created="' + createdMillis + '">✓</span>';
+        }
         if(isMe && !m.deleted){
           isi += '<span class="bubble-actions">' +
             '<button type="button" class="bubble-edit-btn" data-msgid="' + doc.id + '" data-teks="' + escHtmlAttr(m.text) + '">✏️ Edit</button>' +
@@ -1240,6 +1290,7 @@ function openChatDetail(kontak, isGroup){
         div.innerHTML = isi;
         box.appendChild(div);
       });
+      perbaruiCentangDibaca();
       box.scrollTop = box.scrollHeight;
     }, () => {
       box.innerHTML = '<p class="muted small" style="text-align:center;">Gagal memuat pesan.</p>';
@@ -1288,6 +1339,7 @@ function handleSendChat(e){
 
 function tutupChatDetail(){
   if(unsubscribeChatMessages){ unsubscribeChatMessages(); unsubscribeChatMessages = null; }
+  if(unsubscribeReadStatus){ unsubscribeReadStatus(); unsubscribeReadStatus = null; }
   showPage('chat');
   renderChatList();
 }
