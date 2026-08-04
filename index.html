@@ -351,8 +351,30 @@ body{
   padding:12px 16px;
   border-bottom:1px solid var(--purple-050);
 }
-.icon-btn.dark{color:var(--purple-700);font-size:20px;}
+.icon-btn.dark{color:var(--purple-700);font-size:20px;background:none;border:none;cursor:pointer;}
 .cd-name{font-weight:700;font-size:14px;margin:0;}
+
+.image-lightbox{
+  position:fixed;inset:0;z-index:200;
+  background:rgba(0,0,0,0.9);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;padding:20px;
+}
+.image-lightbox img{
+  max-width:100%;max-height:70vh;
+  border-radius:8px;
+}
+#btn-lightbox-close{
+  position:absolute;top:20px;right:20px;
+  background:rgba(255,255,255,0.15);color:var(--white);
+  border:none;border-radius:50%;
+  width:38px;height:38px;font-size:16px;cursor:pointer;
+}
+.btn-lightbox-download{
+  background:var(--purple-700);color:var(--white);
+  padding:12px 22px;border-radius:30px;
+  text-decoration:none;font-weight:700;font-size:14px;
+}
 .chat-messages{
   flex:1;overflow-y:auto;
   padding:16px;
@@ -677,10 +699,11 @@ body{
     <div class="chat-detail-header">
       <button class="icon-btn dark" id="btn-chat-back">←</button>
       <div class="avatar-circle" id="cd-avatar">?</div>
-      <div>
+      <div style="flex:1;">
         <p class="cd-name" id="cd-name">-</p>
         <p class="cd-status muted small" id="cd-status">-</p>
       </div>
+      <button class="icon-btn dark" id="btn-hapus-obrolan" title="Hapus obrolan ini dari daftar saya">🗑️</button>
     </div>
     <div id="chat-messages" class="chat-messages"></div>
     <div id="chat-image-preview" class="chat-image-preview" style="display:none;">
@@ -732,6 +755,13 @@ body{
 
 <div id="toast" class="toast"></div>
 
+<!-- Lightbox foto: lihat besar + download -->
+<div id="image-lightbox" class="image-lightbox" style="display:none;">
+  <button type="button" id="btn-lightbox-close">✕</button>
+  <img id="lightbox-img" src="" alt="foto">
+  <a id="btn-lightbox-download" class="btn-lightbox-download" download="foto-tbr1digital.jpg">⬇ Simpan Foto</a>
+</div>
+
 <!-- ====== FIREBASE (online) ====== -->
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
@@ -760,11 +790,15 @@ body{
 /* Fix tinggi layar untuk WebView Android (Acode dkk) - 100vh sering salah hitung
    karena ada address bar, jadi kita hitung manual pakai window.innerHeight */
 function setRealVH(){
-  document.documentElement.style.setProperty('--vh', (window.innerHeight * 0.01) + 'px');
+  const h = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+  document.documentElement.style.setProperty('--vh', (h * 0.01) + 'px');
 }
 setRealVH();
 window.addEventListener('resize', setRealVH);
 window.addEventListener('orientationchange', setRealVH);
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', setRealVH);
+}
 
 let currentProfile = null;  // cache data profil dari Firestore (termasuk uid)
 let authMode = 'login';     // 'login' atau 'daftar' - dipilih manual via toggle
@@ -1166,6 +1200,29 @@ function getLastSeenMap(){
   const raw = localStorage.getItem('tbr1_chat_last_seen');
   return raw ? JSON.parse(raw) : {};
 }
+
+function getHiddenMap(){
+  const raw = localStorage.getItem('tbr1_chat_hidden');
+  return raw ? JSON.parse(raw) : {};
+}
+function setHidden(chatId, millis){
+  const map = getHiddenMap();
+  map[chatId] = millis;
+  localStorage.setItem('tbr1_chat_hidden', JSON.stringify(map));
+}
+function clearHidden(chatId){
+  const map = getHiddenMap();
+  delete map[chatId];
+  localStorage.setItem('tbr1_chat_hidden', JSON.stringify(map));
+}
+
+function handleHapusObrolan(){
+  if(!activeChatId) return;
+  if(!confirm('Hapus obrolan ini dari daftar kamu? Pesan lama akan hilang dari daftar, tapi kalau ada pesan baru masuk, obrolan ini akan muncul lagi.')) return;
+  setHidden(activeChatId, Date.now());
+  showToast('Obrolan dihapus dari daftar kamu.');
+  tutupChatDetail();
+}
 function setLastSeen(chatId, millis){
   const map = getLastSeenMap();
   map[chatId] = millis;
@@ -1192,7 +1249,9 @@ function muatPreview(chatId){
       const elText = document.getElementById('pv-text-' + chatId);
       const elTime = document.getElementById('pv-time-' + chatId);
       const elDot = document.getElementById('pv-dot-' + chatId);
+      const elItem = document.getElementById('item-' + chatId);
       if(!elText) return; // user sudah pindah halaman
+      let pesanMillis = 0;
       if(msgSnap.empty){
         elText.textContent = 'Belum ada pesan';
       } else {
@@ -1201,7 +1260,18 @@ function muatPreview(chatId){
         const teksPreview = m.deleted ? '🚫 Pesan telah dihapus' : ((m.fromName ? m.fromName + ': ' : '') + isiPesan);
         elText.textContent = teksPreview;
         if(elTime && m.createdAt) elTime.textContent = formatJamChat(m.createdAt.toDate());
-        latestMsgPerChat[chatId] = { from: m.from, createdAtMillis: m.createdAt ? m.createdAt.toMillis() : Date.now() };
+        pesanMillis = m.createdAt ? m.createdAt.toMillis() : Date.now();
+        latestMsgPerChat[chatId] = { from: m.from, createdAtMillis: pesanMillis };
+      }
+      // cek status "dihapus dari daftar" - munculkan lagi kalau ada pesan baru setelah dihapus
+      const hiddenAt = getHiddenMap()[chatId];
+      if(elItem){
+        if(hiddenAt && pesanMillis <= hiddenAt){
+          elItem.style.display = 'none';
+        } else {
+          if(hiddenAt) clearHidden(chatId);
+          elItem.style.display = '';
+        }
       }
       if(elDot) elDot.style.display = isChatUnread(chatId) ? 'inline-block' : 'none';
       perbaruiBadgeGlobal();
@@ -1216,6 +1286,8 @@ function renderChatList(){
   // --- Grup Staf: selalu ada di paling atas ---
   const grupBtn = document.createElement('button');
   grupBtn.className = 'chat-list-item';
+  grupBtn.id = 'item-' + GRUP_STAF_ID;
+  if(getHiddenMap()[GRUP_STAF_ID]) grupBtn.style.display = 'none';
   grupBtn.innerHTML = `
     <div class="avatar-circle" style="background:var(--purple-800)">👥</div>
     <div class="chat-list-info">
@@ -1235,6 +1307,8 @@ function renderChatList(){
       const g = gdoc.data();
       const btn = document.createElement('button');
       btn.className = 'chat-list-item';
+      btn.id = 'item-' + gdoc.id;
+      if(getHiddenMap()[gdoc.id]) btn.style.display = 'none';
       btn.innerHTML = `
         <div class="avatar-circle" style="background:var(--purple-700)">👥</div>
         <div class="chat-list-info">
@@ -1270,6 +1344,8 @@ function renderChatList(){
       const chatId = buatChatId(acc.uid, k.uid);
       const btn = document.createElement('button');
       btn.className = 'chat-list-item';
+      btn.id = 'item-' + chatId;
+      if(getHiddenMap()[chatId]) btn.style.display = 'none';
       btn.innerHTML = `
         <div class="avatar-circle" style="background:var(--purple-600)">${initial(k.nama)}</div>
         <div class="chat-list-info">
@@ -1879,6 +1955,9 @@ window.addEventListener('DOMContentLoaded', () => {
   // Chat: tombol back di halaman detail -> putus listener real-time, balik ke daftar chat
   $('btn-chat-back').addEventListener('click', tutupChatDetail);
 
+  // Chat: hapus obrolan ini dari daftar saya
+  $('btn-hapus-obrolan').addEventListener('click', handleHapusObrolan);
+
   // Buat Grup Baru
   $('btn-buat-grup').addEventListener('click', goToBuatGrup);
   $('buat-grup-form').addEventListener('submit', handleBuatGrupSubmit);
@@ -1890,15 +1969,25 @@ window.addEventListener('DOMContentLoaded', () => {
   $('chat-image-input').addEventListener('change', handleImageSelect);
   $('btn-cancel-image').addEventListener('click', batalkanGambarChat);
 
-  // Edit & hapus pesan sendiri (delegasi, karena bubble dibuat ulang tiap ada perubahan)
+  // Edit & hapus pesan sendiri, buka foto besar (delegasi, karena bubble dibuat ulang tiap ada perubahan)
   $('chat-messages').addEventListener('click', (e) => {
     const editBtn = e.target.closest('.bubble-edit-btn');
     const delBtn = e.target.closest('.bubble-delete-btn');
+    const img = e.target.closest('.bubble-image');
     if(editBtn){
       handleEditPesan(activeChatId, editBtn.dataset.msgid, editBtn.dataset.teks);
     } else if(delBtn){
       handleHapusPesan(activeChatId, delBtn.dataset.msgid);
+    } else if(img){
+      $('lightbox-img').src = img.src;
+      $('btn-lightbox-download').href = img.src;
+      $('image-lightbox').style.display = 'flex';
     }
+  });
+
+  // Lightbox foto: tutup
+  $('btn-lightbox-close').addEventListener('click', () => {
+    $('image-lightbox').style.display = 'none';
   });
 
   // Komunitas: kirim postingan (dummy, tersimpan lokal saja)
