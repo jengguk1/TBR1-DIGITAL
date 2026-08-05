@@ -133,6 +133,27 @@ body{
 
 .field-hint{font-size:11px;color:var(--purple-600);margin:4px 0 0;}
 
+.avatar-upload-wrap{position:relative;display:inline-block;cursor:pointer;}
+.avatar-edit-badge{
+  position:absolute;bottom:-2px;right:-2px;
+  background:var(--purple-700);color:var(--white);
+  width:22px;height:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;border:2px solid var(--white);
+}
+.avatar-edit-badge.small{width:18px;height:18px;font-size:9px;}
+.avatar-edit-badge.hidden{display:none;}
+.avatar-circle img, img.avatar-circle{object-fit:cover;}
+
+.chat-search-input{
+  width:100%;padding:10px 14px;
+  border:1px solid var(--gray-300);
+  border-radius:20px;
+  font-size:13.5px;
+  background:var(--purple-050);
+  margin-top:8px;
+}
+
 /* ===== MENUNGGU PERSETUJUAN ===== */
 #screen-pending.active{display:flex;align-items:center;}
 .pending-box{
@@ -694,7 +715,11 @@ body{
   <!-- Halaman: Profil Saya -->
   <main id="page-profil" class="page">
     <div class="profile-card">
-      <div class="avatar-circle avatar-lg" id="profil-avatar">G</div>
+      <label for="profil-foto-input" class="avatar-upload-wrap">
+        <div class="avatar-circle avatar-lg" id="profil-avatar">G</div>
+        <span class="avatar-edit-badge">📷</span>
+      </label>
+      <input type="file" id="profil-foto-input" accept="image/*" style="display:none;">
       <h3 id="profil-nama">-</h3>
       <p id="profil-email" class="muted">-</p>
       <p id="profil-peran" class="role-badge">-</p>
@@ -738,6 +763,7 @@ body{
   <!-- Halaman: Daftar Chat (khusus Guru/Admin/Kepala Sekolah) -->
   <main id="page-chat" class="page">
     <button class="btn-buat-grup" id="btn-buat-grup">➕ Buat Grup Baru</button>
+    <input type="text" id="chat-search-input" class="chat-search-input" placeholder="🔍 Cari nama staf...">
     <p class="muted small" style="margin:10px 0;">Kontak staf sekolah:</p>
     <div id="chat-list" class="chat-list"></div>
   </main>
@@ -759,7 +785,11 @@ body{
   <main id="page-chat-detail" class="page">
     <div class="chat-detail-header">
       <button class="icon-btn dark" id="btn-chat-back">←</button>
-      <div class="avatar-circle" id="cd-avatar">?</div>
+      <div class="avatar-upload-wrap" id="cd-avatar-wrap">
+        <div class="avatar-circle" id="cd-avatar">?</div>
+        <span class="avatar-edit-badge small hidden" id="cd-avatar-badge">📷</span>
+      </div>
+      <input type="file" id="grup-foto-input" accept="image/*" style="display:none;">
       <div style="flex:1;">
         <p class="cd-name" id="cd-name">-</p>
         <p class="cd-status muted small" id="cd-status">-</p>
@@ -947,9 +977,8 @@ function refreshGreeting(){
   const acc = getAccount();
   if(!acc) return;
   const nama = acc.nama || 'Guru';
-  const initial = nama.trim().charAt(0).toUpperCase() || 'G';
   $('greet-name').textContent = nama.split(' ')[0];
-  $('greet-avatar').textContent = initial;
+  $('greet-avatar').innerHTML = avatarInnerHtml(nama, acc.fotoProfil);
 
   let roleText = ROLE_LABEL[acc.peran] || '';
   if(acc.peran === 'wali_murid' && acc.kelas) roleText += ' \u2022 ' + acc.kelas;
@@ -983,7 +1012,7 @@ function fillProfileForm(){
   if(!acc) return;
   $('profil-nama').textContent = acc.nama || '-';
   $('profil-email').textContent = acc.email || '-';
-  $('profil-avatar').textContent = (acc.nama || 'G').trim().charAt(0).toUpperCase();
+  $('profil-avatar').innerHTML = avatarInnerHtml(acc.nama, acc.fotoProfil);
 
   let roleText = ROLE_LABEL[acc.peran] || '-';
   if(acc.peran === 'wali_murid' && acc.kelas) roleText += ' \u2022 ' + acc.kelas;
@@ -1224,6 +1253,54 @@ function handleLogout(){
 }
 
 /* ---------- Simpan perubahan profil ---------- */
+function handleProfilFotoSelect(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const acc = getAccount();
+  if(!acc) return;
+  showToast('Memproses foto...');
+  kompresGambar(file, 200, 150000, (dataUrl) => {
+    saveProfileToFirestore(acc.uid, { fotoProfil: dataUrl }).then(() => {
+      currentProfile.fotoProfil = dataUrl;
+      fillProfileForm();
+      refreshGreeting();
+      showToast('Foto profil berhasil diubah.');
+    }).catch(() => showToast('Gagal menyimpan foto profil.'));
+  });
+  e.target.value = '';
+}
+
+function handleGrupFotoSelect(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const acc = getAccount();
+  if(!acc || acc.peran !== 'admin' || !activeChatIsGroup || !activeChatId){
+    e.target.value = '';
+    return;
+  }
+  showToast('Memproses foto grup...');
+  kompresGambar(file, 250, 150000, (dataUrl) => {
+    db.collection('groups').doc(activeChatId).set({ foto: dataUrl }, { merge:true }).then(() => {
+      $('cd-avatar').innerHTML = avatarInnerHtml(null, dataUrl);
+      showToast('Foto grup berhasil diubah.');
+    }).catch(() => showToast('Gagal menyimpan foto grup.'));
+  });
+  e.target.value = '';
+}
+
+function handleChatSearch(){
+  const q = $('chat-search-input').value.trim().toLowerCase();
+  if(!q){
+    renderChatList(); // kosongkan pencarian -> kembali ke tampilan normal (hormati status hapus)
+    return;
+  }
+  document.querySelectorAll('#chat-list .chat-list-item').forEach(item => {
+    const nameEl = item.querySelector('.chat-list-name');
+    const nama = nameEl ? nameEl.textContent.toLowerCase() : '';
+    item.style.display = nama.includes(q) ? '' : 'none';
+  });
+}
+
 function handleProfilSubmit(e){
   e.preventDefault();
   const acc = getAccount();
@@ -1283,6 +1360,10 @@ let unsubscribeChatMessages = null;
 
 function initial(nama){
   return (nama || '?').trim().charAt(0).toUpperCase() || '?';
+}
+function avatarInnerHtml(nama, foto){
+  if(foto) return '<img src="' + foto + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+  return initial(nama);
 }
 function formatJamChat(date){
   return date.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
@@ -1406,7 +1487,7 @@ function renderChatList(){
   grupBtn.id = 'item-' + GRUP_STAF_ID;
   if(getHiddenMap()[GRUP_STAF_ID]) grupBtn.style.display = 'none';
   grupBtn.innerHTML = `
-    <div class="avatar-circle" style="background:var(--purple-800)">👥</div>
+    <div class="avatar-circle" style="background:var(--purple-800)" id="av-${GRUP_STAF_ID}">👥</div>
     <div class="chat-list-info">
       <div class="chat-list-top">
         <span class="chat-list-name-wrap"><span class="chat-list-name">Grup Guru &amp; Staf</span><span class="unread-dot" id="pv-dot-${GRUP_STAF_ID}"></span></span>
@@ -1414,9 +1495,17 @@ function renderChatList(){
       </div>
       <p class="chat-list-preview" id="pv-text-${GRUP_STAF_ID}">Memuat...</p>
     </div>`;
-  grupBtn.addEventListener('click', () => openChatDetail({ nama: 'Grup Guru & Staf' }, true, GRUP_STAF_ID));
+  let grupStafFoto = null;
+  grupBtn.addEventListener('click', () => openChatDetail({ nama: 'Grup Guru & Staf', foto: grupStafFoto }, true, GRUP_STAF_ID));
   list.appendChild(grupBtn);
   muatPreview(GRUP_STAF_ID);
+  db.collection('groups').doc(GRUP_STAF_ID).get().then(doc => {
+    if(doc.exists && doc.data().foto){
+      grupStafFoto = doc.data().foto;
+      const avEl = document.getElementById('av-' + GRUP_STAF_ID);
+      if(avEl) avEl.innerHTML = avatarInnerHtml(null, grupStafFoto);
+    }
+  }).catch(() => {});
 
   // --- Grup-grup custom buatan sendiri/orang lain ---
   db.collection('groups').where('members', 'array-contains', acc.uid).get().then(gsnap => {
@@ -1427,7 +1516,7 @@ function renderChatList(){
       btn.id = 'item-' + gdoc.id;
       if(getHiddenMap()[gdoc.id]) btn.style.display = 'none';
       btn.innerHTML = `
-        <div class="avatar-circle" style="background:var(--purple-700)">👥</div>
+        <div class="avatar-circle" style="background:var(--purple-700)">${g.foto ? avatarInnerHtml(null, g.foto) : '👥'}</div>
         <div class="chat-list-info">
           <div class="chat-list-top">
             <span class="chat-list-name-wrap"><span class="chat-list-name">${g.name || '(Grup tanpa nama)'}</span><span class="unread-dot" id="pv-dot-${gdoc.id}"></span></span>
@@ -1435,7 +1524,7 @@ function renderChatList(){
           </div>
           <p class="chat-list-preview" id="pv-text-${gdoc.id}">Memuat...</p>
         </div>`;
-      btn.addEventListener('click', () => openChatDetail({ nama: g.name }, true, gdoc.id));
+      btn.addEventListener('click', () => openChatDetail({ nama: g.name, foto: g.foto }, true, gdoc.id));
       list.appendChild(btn);
       muatPreview(gdoc.id);
     });
@@ -1464,7 +1553,7 @@ function renderChatList(){
       btn.id = 'item-' + chatId;
       if(getHiddenMap()[chatId]) btn.style.display = 'none';
       btn.innerHTML = `
-        <div class="avatar-circle" style="background:var(--purple-600)">${initial(k.nama)}</div>
+        <div class="avatar-circle" style="background:var(--purple-600)">${avatarInnerHtml(k.nama, k.fotoProfil)}</div>
         <div class="chat-list-info">
           <div class="chat-list-top">
             <span class="chat-list-name-wrap"><span class="chat-list-name">${k.nama || '(Tanpa nama)'}</span><span class="unread-dot" id="pv-dot-${chatId}"></span></span>
@@ -1577,11 +1666,17 @@ function openChatDetail(kontak, isGroup, customChatId){
   activeChatIsGroup = !!isGroup;
   activeChatPartnerUid = isGroup ? null : kontak.uid;
   activeChatId = isGroup ? (customChatId || GRUP_STAF_ID) : buatChatId(acc.uid, kontak.uid);
+  clearHidden(activeChatId); // buka chat = otomatis nggak "dihapus" lagi
 
   $('cd-name').textContent = kontak.nama || '(Tanpa nama)';
-  $('cd-avatar').textContent = isGroup ? '👥' : initial(kontak.nama);
+  $('cd-avatar').innerHTML = isGroup ? (kontak.foto ? avatarInnerHtml(null, kontak.foto) : '👥') : avatarInnerHtml(kontak.nama, kontak.fotoProfil);
   $('cd-avatar').style.background = isGroup ? 'var(--purple-800)' : 'var(--purple-600)';
   $('cd-status').textContent = isGroup ? (activeChatId === GRUP_STAF_ID ? 'Guru, Admin & Kepala Sekolah' : 'Grup') : (ROLE_LABEL[kontak.peran] || '');
+
+  // Foto grup cuma boleh diganti Admin
+  const bolehGantiFotoGrup = isGroup && acc.peran === 'admin';
+  $('cd-avatar-badge').classList.toggle('hidden', !bolehGantiFotoGrup);
+  $('cd-avatar-wrap').style.cursor = bolehGantiFotoGrup ? 'pointer' : 'default';
 
   showPage('chat-detail');
   $('header-title').textContent = kontak.nama || 'Chat';
@@ -1673,8 +1768,7 @@ function handleHapusPesan(chatId, messageId){
 
 let pendingImageBase64 = null;
 
-function handleImageSelect(e){
-  const file = e.target.files[0];
+function kompresGambar(file, maxDim, targetMaxBytes, callback){
   if(!file) return;
   if(!file.type.startsWith('image/')){
     showToast('File harus berupa gambar.');
@@ -1684,31 +1778,38 @@ function handleImageSelect(e){
   reader.onload = (ev) => {
     const img = new Image();
     img.onload = () => {
-      const MAX_DIM = 800; // kecilkan dulu biar hemat, cukup buat dilihat di HP
       let w = img.width, h = img.height;
-      if(w > h && w > MAX_DIM){ h = Math.round(h * (MAX_DIM / w)); w = MAX_DIM; }
-      else if(h >= w && h > MAX_DIM){ w = Math.round(w * (MAX_DIM / h)); h = MAX_DIM; }
+      if(w > h && w > maxDim){ h = Math.round(h * (maxDim / w)); w = maxDim; }
+      else if(h >= w && h > maxDim){ w = Math.round(w * (maxDim / h)); h = maxDim; }
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
 
-      let quality = 0.6;
+      let quality = 0.7;
       let dataUrl = canvas.toDataURL('image/jpeg', quality);
-      while(dataUrl.length > 650000 && quality > 0.2){
+      while(dataUrl.length > targetMaxBytes && quality > 0.2){
         quality -= 0.1;
         dataUrl = canvas.toDataURL('image/jpeg', quality);
       }
-      if(dataUrl.length > 650000){
+      if(dataUrl.length > targetMaxBytes){
         showToast('Foto masih terlalu besar walau sudah dikompres. Coba foto lain.');
         return;
       }
-      pendingImageBase64 = dataUrl;
-      $('chat-image-preview-img').src = dataUrl;
-      $('chat-image-preview').style.display = 'flex';
+      callback(dataUrl);
     };
     img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
+}
+
+function handleImageSelect(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  kompresGambar(file, 800, 650000, (dataUrl) => {
+    pendingImageBase64 = dataUrl;
+    $('chat-image-preview-img').src = dataUrl;
+    $('chat-image-preview').style.display = 'flex';
+  });
 }
 
 function batalkanGambarChat(){
@@ -1744,6 +1845,7 @@ function tutupChatDetail(){
   if(unsubscribeChatMessages){ unsubscribeChatMessages(); unsubscribeChatMessages = null; }
   if(unsubscribeReadStatus){ unsubscribeReadStatus(); unsubscribeReadStatus = null; }
   batalkanGambarChat();
+  $('chat-search-input').value = '';
   showPage('chat');
   renderChatList();
 }
@@ -2139,6 +2241,21 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Panel Admin: toggle pendaftaran + approve/kick (delegasi)
   $('btn-toggle-registrasi').addEventListener('click', handleToggleRegistrasi);
+
+  // Ganti foto profil
+  $('profil-foto-input').addEventListener('change', handleProfilFotoSelect);
+
+  // Ganti foto grup (khusus admin) + cegah klik kalau bukan admin/bukan grup
+  $('cd-avatar-wrap').addEventListener('click', () => {
+    const acc = getAccount();
+    if(acc && acc.peran === 'admin' && activeChatIsGroup){
+      $('grup-foto-input').click();
+    }
+  });
+  $('grup-foto-input').addEventListener('change', handleGrupFotoSelect);
+
+  // Pencarian kontak staf di halaman Chat
+  $('chat-search-input').addEventListener('input', handleChatSearch);
   $('admin-user-list').addEventListener('click', (e) => {
     const approveBtn = e.target.closest('.admin-btn.approve');
     const kickBtn = e.target.closest('.admin-btn.kick');
