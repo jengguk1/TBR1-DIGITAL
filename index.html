@@ -131,6 +131,40 @@ body{
 .link-btn.center{display:block;margin:16px auto 0;}
 .auth-toggle{text-align:center;font-size:12.5px;color:var(--gray-500);margin-top:10px;}
 
+.field-hint{font-size:11px;color:var(--purple-600);margin:4px 0 0;}
+
+/* ===== MENUNGGU PERSETUJUAN ===== */
+#screen-pending.active{display:flex;align-items:center;}
+.pending-box{
+  max-width:480px;margin:0 auto;padding:32px 28px;text-align:center;
+}
+.pending-icon{font-size:52px;margin:0 0 10px;}
+.pending-box h2{margin:0 0 10px;}
+.pending-box p{margin:0 0 8px;font-size:13.5px;line-height:1.5;}
+
+/* ===== PANEL ADMIN ===== */
+.admin-user-list{display:flex;flex-direction:column;gap:8px;}
+.admin-user-card{
+  background:var(--purple-050);
+  border-radius:var(--radius-sm);
+  padding:12px 14px;
+}
+.admin-user-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.admin-user-nama{font-weight:700;font-size:13.5px;}
+.admin-user-detail{font-size:12px;color:var(--gray-500);margin:2px 0 8px;}
+.admin-status-badge{
+  font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;flex-shrink:0;
+}
+.admin-status-badge.aktif{background:#DCF3E4;color:#1E8E5A;}
+.admin-status-badge.pending{background:#FFF1D6;color:#9A6A00;}
+.admin-user-actions{display:flex;gap:8px;}
+.admin-btn{
+  flex:1;padding:8px;border-radius:8px;border:none;
+  font-size:12px;font-weight:700;cursor:pointer;
+}
+.admin-btn.approve{background:var(--purple-700);color:var(--white);}
+.admin-btn.kick{background:var(--white);color:var(--danger);border:1px solid var(--danger);}
+
 /* ===== APP SHELL ===== */
 .app-shell{display:none;padding-bottom:70px;}
 .app-shell.active{display:block;}
@@ -534,9 +568,12 @@ body{
             <option value="" disabled selected>Pilih peran</option>
             <option value="guru">Guru</option>
             <option value="wali_murid">Wali Murid</option>
-            <option value="admin">Admin / Tata Usaha</option>
-            <option value="kepala_sekolah">Kepala Sekolah</option>
           </select>
+        </div>
+        <div id="field-sekolah" class="field hidden">
+          <label>Nama Sekolah</label>
+          <input type="text" id="input-sekolah" placeholder="Contoh: SDN TAMBERU 1" value="SDN TAMBERU 1">
+          <p class="field-hint" id="sekolah-hint"></p>
         </div>
         <div id="field-kelas" class="field hidden">
           <label>Kelas Anak</label>
@@ -588,6 +625,17 @@ body{
   </div>
 </section>
 
+<!-- ====== MENUNGGU PERSETUJUAN ADMIN ====== -->
+<section id="screen-pending" class="screen">
+  <div class="pending-box">
+    <p class="pending-icon">⏳</p>
+    <h2>Menunggu Persetujuan</h2>
+    <p class="muted">Akun kamu berhasil dibuat, tapi masih perlu disetujui Admin sekolah dulu sebelum bisa dipakai.</p>
+    <p class="muted small">Hubungi Admin sekolah kamu untuk mempercepat proses ini.</p>
+    <button type="button" class="btn-outline-danger" id="btn-logout-pending" style="margin-top:20px;">Keluar</button>
+  </div>
+</section>
+
 <!-- ====== APP SHELL (setelah login) ====== -->
 <section id="screen-app" class="screen app-shell">
 
@@ -627,7 +675,20 @@ body{
       <button class="menu-card" data-page="pengaturan">
         <span class="menu-icon">⚙️</span> Pengaturan
       </button>
+      <button class="menu-card" data-page="admin-panel" id="menu-admin-panel" style="display:none;">
+        <span class="menu-icon">🛡️</span> Panel Admin
+      </button>
     </div>
+  </main>
+
+  <!-- Halaman: Panel Admin (khusus peran admin) -->
+  <main id="page-admin-panel" class="page">
+    <div class="settings-group">
+      <p class="settings-label">PENDAFTARAN AKUN BARU</p>
+      <button class="settings-item" id="btn-toggle-registrasi">Pendaftaran Akun Baru <span id="registrasi-status">Memuat...</span></button>
+    </div>
+    <p class="muted small" style="margin:14px 0 8px;">Semua akun terdaftar:</p>
+    <div id="admin-user-list" class="admin-user-list"></div>
   </main>
 
   <!-- Halaman: Profil Saya -->
@@ -858,6 +919,7 @@ const pageTitles = {
   chat: 'Chat',
   'buat-grup': 'Buat Grup Baru',
   'komunitas-list': 'Komunitas',
+  'admin-panel': 'Panel Admin',
   soon: 'Segera Hadir'
 };
 function showPage(pageName){
@@ -909,6 +971,10 @@ function applyRoleUI(){
   if(chatNav){
     chatNav.style.display = (acc.peran === 'wali_murid') ? 'none' : 'flex';
   }
+  const adminMenu = $('menu-admin-panel');
+  if(adminMenu){
+    adminMenu.style.display = (acc.peran === 'admin') ? 'flex' : 'none';
+  }
 }
 
 /* ---------- Halaman Profil: isi form dari data tersimpan ---------- */
@@ -940,22 +1006,33 @@ const ROLE_LABEL = {
   kepala_sekolah: 'Kepala Sekolah'
 };
 
+// Email yang otomatis jadi Admin & langsung disetujui saat pertama kali daftar
+const MASTER_ADMIN_EMAILS = ['masraji03@gmail.com', 'sdntamberu01@gmail.com', 'jengguk92@gmail.com'];
+const SEKOLAH_UTAMA = 'sdn tamberu 1'; // huruf kecil semua, buat dibandingkan
+
+function isSekolahUtama(nama){
+  return (nama || '').trim().toLowerCase() === SEKOLAH_UTAMA;
+}
+
 function setupAuthScreen(){
   if(authMode === 'daftar'){
     $('auth-title').textContent = 'Buat Akun';
     $('auth-desc').textContent = 'Daftar untuk mulai memakai TBR1 Digital.';
     $('field-nama').classList.remove('hidden');
     $('field-peran').classList.remove('hidden');
+    $('field-sekolah').classList.remove('hidden');
     $('field-kelas').classList.add('hidden'); // baru muncul kalau peran = wali murid
     $('auth-submit-btn').textContent = 'DAFTAR & MASUK';
     $('forgot-link-wrap').classList.add('hidden');
     $('auth-toggle-text').textContent = 'Sudah punya akun?';
     $('btn-toggle-auth').textContent = 'Masuk di sini';
+    perbaruiSekolahHint();
   } else {
     $('auth-title').textContent = 'Masuk';
     $('auth-desc').textContent = 'Masuk dengan akun TBR1 Digital kamu.';
     $('field-nama').classList.add('hidden');
     $('field-peran').classList.add('hidden');
+    $('field-sekolah').classList.add('hidden');
     $('field-kelas').classList.add('hidden');
     $('auth-submit-btn').textContent = 'MASUK';
     $('forgot-link-wrap').classList.remove('hidden');
@@ -966,9 +1043,30 @@ function setupAuthScreen(){
   $('auth-form').reset();
 }
 
+function perbaruiSekolahHint(){
+  const nama = $('input-sekolah').value;
+  const hint = $('sekolah-hint');
+  if(isSekolahUtama(nama)){
+    hint.textContent = '✅ Akun langsung aktif, tidak perlu persetujuan Admin.';
+    hint.style.color = '#1E8E5A';
+  } else {
+    hint.textContent = '⏳ Sekolah selain SDN TAMBERU 1 perlu persetujuan Admin dulu.';
+    hint.style.color = '#9A6A00';
+  }
+}
+
 function toggleAuthMode(){
   authMode = (authMode === 'login') ? 'daftar' : 'login';
   setupAuthScreen();
+}
+
+function masukSesuaiStatusApproval(namaSapaan){
+  if(currentProfile && currentProfile.approved === false){
+    showScreen('screen-pending');
+  } else {
+    enterApp();
+    if(namaSapaan) showToast(namaSapaan);
+  }
 }
 
 function handleAuthSubmit(e){
@@ -984,6 +1082,8 @@ function handleAuthSubmit(e){
     const nama = $('input-nama').value.trim();
     const peran = $('input-peran').value;
     const kelas = $('input-kelas').value;
+    const sekolah = $('input-sekolah').value.trim();
+    const isMasterAdmin = MASTER_ADMIN_EMAILS.includes(email.toLowerCase());
 
     if(!nama || !email || password.length < 6){
       errEl.textContent = 'Lengkapi nama, email, dan password minimal 6 karakter.';
@@ -995,6 +1095,11 @@ function handleAuthSubmit(e){
       errEl.classList.remove('hidden');
       return;
     }
+    if(!sekolah){
+      errEl.textContent = 'Isi nama sekolah dulu ya.';
+      errEl.classList.remove('hidden');
+      return;
+    }
     if(peran === 'wali_murid' && !kelas){
       errEl.textContent = 'Pilih kelas anak kamu.';
       errEl.classList.remove('hidden');
@@ -1002,19 +1107,32 @@ function handleAuthSubmit(e){
     }
 
     btn.disabled = true; btn.textContent = 'MEMPROSES...';
-    auth.createUserWithEmailAndPassword(email, password)
-      .then(cred => {
-        const profile = { nama, email, peran, kelas: peran === 'wali_murid' ? kelas : null, nip:'', nuptk:'', hp:'', alamat:'' };
-        return saveProfileToFirestore(cred.user.uid, profile).then(() => {
-          currentProfile = { uid: cred.user.uid, ...profile };
+
+    // cek dulu apakah pendaftaran sedang dibuka (admin utama selalu boleh masuk walau ditutup)
+    db.collection('config').doc('settings').get()
+      .then(cfgDoc => {
+        const regOpen = cfgDoc.exists ? (cfgDoc.data().registrationOpen !== false) : true;
+        if(!regOpen && !isMasterAdmin){
+          throw { code:'custom/registration-closed' };
+        }
+        const profile = isMasterAdmin
+          ? { nama, email, peran:'admin', sekolah:'SDN TAMBERU 1', approved:true, kelas:null, nip:'', nuptk:'', hp:'', alamat:'' }
+          : { nama, email, peran, sekolah, approved:isSekolahUtama(sekolah), kelas: peran === 'wali_murid' ? kelas : null, nip:'', nuptk:'', hp:'', alamat:'' };
+        return auth.createUserWithEmailAndPassword(email, password).then(cred => {
+          return saveProfileToFirestore(cred.user.uid, profile).then(() => {
+            currentProfile = { uid: cred.user.uid, ...profile };
+          });
         });
       })
       .then(() => {
-        enterApp();
-        showToast('Akun berhasil dibuat. Selamat datang, ' + nama + '!');
+        masukSesuaiStatusApproval('Akun berhasil dibuat. Selamat datang, ' + nama + '!');
       })
       .catch(err => {
-        errEl.textContent = terjemahErrorFirebase(err);
+        if(err && err.code === 'custom/registration-closed'){
+          errEl.textContent = 'Pendaftaran akun baru sedang ditutup sementara. Hubungi Admin sekolah.';
+        } else {
+          errEl.textContent = terjemahErrorFirebase(err);
+        }
         errEl.classList.remove('hidden');
       })
       .finally(() => { btn.disabled = false; btn.textContent = 'DAFTAR & MASUK'; });
@@ -1032,8 +1150,7 @@ function handleAuthSubmit(e){
         currentProfile = { uid: cred.user.uid, ...(profile || {}) };
       }))
       .then(() => {
-        enterApp();
-        showToast('Selamat datang kembali, ' + (currentProfile.nama || '') + '!');
+        masukSesuaiStatusApproval('Selamat datang kembali, ' + (currentProfile.nama || '') + '!');
       })
       .catch(err => {
         errEl.textContent = terjemahErrorFirebase(err);
@@ -1720,6 +1837,85 @@ function hentikanPantauChatMasuk(){
 }
 
 /* ============================================================
+   PANEL ADMIN - pantau semua akun, approve/kick, buka-tutup pendaftaran
+   ============================================================ */
+function goToAdminPanel(){
+  const acc = getAccount();
+  if(!acc || acc.peran !== 'admin'){
+    showToast('Halaman ini khusus Admin.');
+    return;
+  }
+  showPage('admin-panel');
+  muatStatusRegistrasi();
+  renderAdminUserList();
+}
+
+function muatStatusRegistrasi(){
+  const el = $('registrasi-status');
+  el.textContent = '...';
+  db.collection('config').doc('settings').get().then(doc => {
+    const buka = doc.exists ? (doc.data().registrationOpen !== false) : true;
+    el.textContent = buka ? 'Aktif' : 'Nonaktif';
+    el.dataset.open = buka ? '1' : '0';
+  });
+}
+
+function handleToggleRegistrasi(){
+  const el = $('registrasi-status');
+  const bukaSekarang = el.dataset.open === '1';
+  db.collection('config').doc('settings').set({ registrationOpen: !bukaSekarang }, { merge:true })
+    .then(() => {
+      showToast(bukaSekarang ? 'Pendaftaran akun baru dinonaktifkan.' : 'Pendaftaran akun baru diaktifkan.');
+      muatStatusRegistrasi();
+    })
+    .catch(() => showToast('Gagal mengubah status pendaftaran.'));
+}
+
+function renderAdminUserList(){
+  const list = $('admin-user-list');
+  list.innerHTML = '<p class="muted small">Memuat daftar akun...</p>';
+  db.collection('users').get().then(snap => {
+    list.innerHTML = '';
+    if(snap.empty){ list.innerHTML = '<p class="muted small">Belum ada akun terdaftar.</p>'; return; }
+    snap.forEach(doc => {
+      const u = doc.data();
+      const uid = doc.id;
+      const aktif = u.approved !== false;
+      const card = document.createElement('div');
+      card.className = 'admin-user-card';
+      card.innerHTML = `
+        <div class="admin-user-top">
+          <div>
+            <div class="admin-user-nama">${u.nama || '(Tanpa nama)'}</div>
+            <div class="admin-user-detail">${u.email || ''} · ${ROLE_LABEL[u.peran] || u.peran || ''}${u.sekolah ? ' · ' + u.sekolah : ''}</div>
+          </div>
+          <span class="admin-status-badge ${aktif ? 'aktif' : 'pending'}">${aktif ? 'Aktif' : 'Menunggu'}</span>
+        </div>
+        <div class="admin-user-actions">
+          ${!aktif ? `<button type="button" class="admin-btn approve" data-uid="${uid}">✅ Setujui</button>` : ''}
+          ${uid !== getAccount().uid ? `<button type="button" class="admin-btn kick" data-uid="${uid}">⛔ Kick</button>` : ''}
+        </div>`;
+      list.appendChild(card);
+    });
+  }).catch(() => {
+    list.innerHTML = '<p class="muted small">Gagal memuat daftar akun.</p>';
+  });
+}
+
+function handleApproveUser(uid){
+  db.collection('users').doc(uid).update({ approved:true })
+    .then(() => { showToast('Akun disetujui.'); renderAdminUserList(); })
+    .catch(() => showToast('Gagal menyetujui akun.'));
+}
+
+function handleKickUser(uid){
+  if(!confirm('Kick akun ini? Pemiliknya tidak akan bisa masuk lagi sampai disetujui ulang.')) return;
+  db.collection('users').doc(uid).update({ approved:false })
+    .then(() => { showToast('Akun berhasil di-kick.'); renderAdminUserList(); })
+    .catch(() => showToast('Gagal kick akun.'));
+}
+
+/* ============================================================
    KOMUNITAS (DUMMY) - forum per kelas, belum tersambung antar HP
    ============================================================ */
 const KEY_KOMUNITAS_EXTRA = 'tbr1_komunitas_extra';
@@ -1857,7 +2053,7 @@ window.addEventListener('DOMContentLoaded', () => {
       loadProfileFromFirestore(pendingUser.uid).then(profile => {
         if(profile){
           currentProfile = { uid: pendingUser.uid, ...profile };
-          enterApp();
+          masukSesuaiStatusApproval();
         } else {
           // Ada login Firebase tapi data profil tidak ketemu -> balik ke login
           authMode = 'login';
@@ -1902,6 +2098,8 @@ window.addEventListener('DOMContentLoaded', () => {
         goToKomunitas();
       } else if(card.dataset.page === 'chat'){
         goToChat();
+      } else if(card.dataset.page === 'admin-panel'){
+        goToAdminPanel();
       } else {
         showPage(card.dataset.page);
       }
@@ -1931,6 +2129,21 @@ window.addEventListener('DOMContentLoaded', () => {
       $('field-kelas').classList.add('hidden');
       $('input-kelas').value = '';
     }
+  });
+
+  // Daftar akun: update hint approval sesuai nama sekolah yang diketik
+  $('input-sekolah').addEventListener('input', perbaruiSekolahHint);
+
+  // Layar Menunggu Persetujuan: tombol keluar
+  $('btn-logout-pending').addEventListener('click', handleLogout);
+
+  // Panel Admin: toggle pendaftaran + approve/kick (delegasi)
+  $('btn-toggle-registrasi').addEventListener('click', handleToggleRegistrasi);
+  $('admin-user-list').addEventListener('click', (e) => {
+    const approveBtn = e.target.closest('.admin-btn.approve');
+    const kickBtn = e.target.closest('.admin-btn.kick');
+    if(approveBtn) handleApproveUser(approveBtn.dataset.uid);
+    if(kickBtn) handleKickUser(kickBtn.dataset.uid);
   });
 
   // Notif bell (placeholder untuk sekarang)
