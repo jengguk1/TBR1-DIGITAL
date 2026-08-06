@@ -156,6 +156,7 @@ body{
 
 /* ===== MENUNGGU PERSETUJUAN ===== */
 #screen-pending.active{display:flex;align-items:center;}
+#screen-kicked.active{display:flex;align-items:center;}
 .pending-box{
   max-width:480px;margin:0 auto;padding:32px 28px;text-align:center;
 }
@@ -178,6 +179,7 @@ body{
 }
 .admin-status-badge.aktif{background:#DCF3E4;color:#1E8E5A;}
 .admin-status-badge.pending{background:#FFF1D6;color:#9A6A00;}
+.admin-status-badge.kicked{background:#FBE0E2;color:#B3261E;}
 .admin-user-actions{display:flex;gap:8px;}
 .admin-btn{
   flex:1;padding:8px;border-radius:8px;border:none;
@@ -657,6 +659,17 @@ body{
   </div>
 </section>
 
+<!-- ====== AKUN DINONAKTIFKAN (kicked admin) ====== -->
+<section id="screen-kicked" class="screen">
+  <div class="pending-box">
+    <p class="pending-icon">⛔</p>
+    <h2>Akun Dinonaktifkan</h2>
+    <p class="muted">Akses akun kamu sudah dinonaktifkan oleh Admin sekolah.</p>
+    <p class="muted small">Hubungi Admin sekolah kamu kalau ini keliru.</p>
+    <button type="button" class="btn-outline-danger" id="btn-logout-kicked" style="margin-top:20px;">Keluar</button>
+  </div>
+</section>
+
 <!-- ====== APP SHELL (setelah login) ====== -->
 <section id="screen-app" class="screen app-shell">
 
@@ -1036,7 +1049,7 @@ const ROLE_LABEL = {
 };
 
 // Email yang otomatis jadi Admin & langsung disetujui saat pertama kali daftar
-const MASTER_ADMIN_EMAILS = ['masraji03@gmail.com', 'sdntamberu01@gmail.com', 'jengguk92@gmail.com'];
+const MASTER_ADMIN_EMAILS = ['sdntamberu01@gmail.com'];
 const SEKOLAH_UTAMA = 'sdn tamberu 1'; // huruf kecil semua, buat dibandingkan
 
 function isSekolahUtama(nama){
@@ -1090,7 +1103,10 @@ function toggleAuthMode(){
 }
 
 function masukSesuaiStatusApproval(namaSapaan){
-  if(currentProfile && currentProfile.approved === false){
+  if(currentProfile && currentProfile.kicked === true){
+    auth.signOut();
+    showScreen('screen-kicked');
+  } else if(currentProfile && currentProfile.approved === false){
     showScreen('screen-pending');
   } else {
     enterApp();
@@ -1983,6 +1999,9 @@ function renderAdminUserList(){
       const u = doc.data();
       const uid = doc.id;
       const aktif = u.approved !== false;
+      const diKick = !aktif && u.kicked === true;
+      let statusClass = 'aktif', statusText = 'Aktif';
+      if(!aktif){ statusClass = diKick ? 'kicked' : 'pending'; statusText = diKick ? 'Di-kick' : 'Menunggu'; }
       const card = document.createElement('div');
       card.className = 'admin-user-card';
       card.innerHTML = `
@@ -1991,7 +2010,7 @@ function renderAdminUserList(){
             <div class="admin-user-nama">${u.nama || '(Tanpa nama)'}</div>
             <div class="admin-user-detail">${u.email || ''} · ${ROLE_LABEL[u.peran] || u.peran || ''}${u.sekolah ? ' · ' + u.sekolah : ''}</div>
           </div>
-          <span class="admin-status-badge ${aktif ? 'aktif' : 'pending'}">${aktif ? 'Aktif' : 'Menunggu'}</span>
+          <span class="admin-status-badge ${statusClass}">${statusText}</span>
         </div>
         <div class="admin-user-actions">
           ${!aktif ? `<button type="button" class="admin-btn approve" data-uid="${uid}">✅ Setujui</button>` : ''}
@@ -2005,14 +2024,14 @@ function renderAdminUserList(){
 }
 
 function handleApproveUser(uid){
-  db.collection('users').doc(uid).update({ approved:true })
+  db.collection('users').doc(uid).update({ approved:true, kicked:false })
     .then(() => { showToast('Akun disetujui.'); renderAdminUserList(); })
     .catch(() => showToast('Gagal menyetujui akun.'));
 }
 
 function handleKickUser(uid){
-  if(!confirm('Kick akun ini? Pemiliknya tidak akan bisa masuk lagi sampai disetujui ulang.')) return;
-  db.collection('users').doc(uid).update({ approved:false })
+  if(!confirm('Kick akun ini? Pemiliknya akan langsung dikeluarkan dan tidak bisa masuk lagi sampai disetujui ulang.')) return;
+  db.collection('users').doc(uid).update({ approved:false, kicked:true })
     .then(() => { showToast('Akun berhasil di-kick.'); renderAdminUserList(); })
     .catch(() => showToast('Gagal kick akun.'));
 }
@@ -2238,6 +2257,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Layar Menunggu Persetujuan: tombol keluar
   $('btn-logout-pending').addEventListener('click', handleLogout);
+  $('btn-logout-kicked').addEventListener('click', handleLogout);
 
   // Panel Admin: toggle pendaftaran + approve/kick (delegasi)
   $('btn-toggle-registrasi').addEventListener('click', handleToggleRegistrasi);
