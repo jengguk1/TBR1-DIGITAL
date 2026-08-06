@@ -188,6 +188,40 @@ body{
 .admin-btn.approve{background:var(--purple-700);color:var(--white);}
 .admin-btn.kick{background:var(--white);color:var(--danger);border:1px solid var(--danger);}
 
+/* ===== HALAMAN INFORMASI ===== */
+.info-title-row{display:flex;align-items:center;justify-content:space-between;}
+.info-i-btn{
+  background:var(--purple-100);color:var(--purple-700);
+  border:none;border-radius:50%;
+  width:24px;height:24px;font-size:13px;font-weight:700;
+  cursor:pointer;
+}
+.minta-data-form input{
+  width:100%;padding:11px 14px;
+  border:1px solid var(--gray-300);border-radius:var(--radius-sm);
+  font-size:14px;background:var(--purple-050);
+}
+.riwayat-list{display:flex;flex-direction:column;gap:8px;}
+.riwayat-card{
+  background:var(--purple-050);border-radius:var(--radius-sm);
+  padding:12px 14px;
+}
+.riwayat-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.riwayat-nama{font-weight:700;font-size:13.5px;}
+.riwayat-detail{font-size:12px;color:var(--gray-500);margin:2px 0 6px;}
+.riwayat-jawaban{
+  font-size:13px;background:var(--white);
+  border-radius:8px;padding:8px 10px;margin-top:6px;
+  white-space:pre-wrap;
+}
+.riwayat-jawab-form{margin-top:8px;display:flex;flex-direction:column;gap:6px;}
+.riwayat-jawab-form textarea{
+  width:100%;padding:8px 10px;border:1px solid var(--gray-300);
+  border-radius:8px;font-size:13px;background:var(--white);
+  resize:vertical;min-height:50px;
+}
+.riwayat-jawab-actions{display:flex;gap:8px;}
+
 /* ===== APP SHELL ===== */
 .app-shell{display:none;padding-bottom:70px;}
 .app-shell.active{display:block;}
@@ -585,6 +619,11 @@ body{
           <label>Nama Lengkap</label>
           <input type="text" id="input-nama" placeholder="Contoh: Aji Saputra">
         </div>
+        <div id="field-panggilan" class="field hidden">
+          <label>Nama Panggilan</label>
+          <input type="text" id="input-panggilan" placeholder="Contoh: Aji">
+          <p class="field-hint">Dipakai orang lain untuk cari data kamu lewat menu Informasi.</p>
+        </div>
         <div id="field-peran" class="field hidden">
           <label>Peran</label>
           <select id="input-peran">
@@ -677,7 +716,7 @@ body{
   <header class="app-header">
     <button class="icon-btn" id="btn-back" style="visibility:hidden">←</button>
     <h1 id="header-title">Beranda</h1>
-    <button class="icon-btn" id="btn-notif">🔔</button>
+    <button class="icon-btn" id="btn-notif" title="Informasi">ℹ️</button>
   </header>
 
   <!-- Halaman: Dashboard -->
@@ -723,6 +762,26 @@ body{
     </div>
     <p class="muted small" style="margin:14px 0 8px;">Semua akun terdaftar:</p>
     <div id="admin-user-list" class="admin-user-list"></div>
+  </main>
+
+  <!-- Halaman: Informasi (minta data guru via nama panggilan) -->
+  <main id="page-informasi" class="page">
+    <div class="info-title-row">
+      <p class="settings-label" style="margin:0;">MINTA DATA GURU</p>
+      <button type="button" id="btn-info-cara" class="info-i-btn">ⓘ</button>
+    </div>
+    <form id="minta-data-form" class="minta-data-form">
+      <input type="text" id="input-panggilan-target" placeholder="Ketik nama panggilan, mis: Aji" required>
+      <button type="submit" class="btn-primary" style="margin-top:8px;">Kirim Permintaan</button>
+    </form>
+
+    <p class="settings-label" style="margin:20px 0 8px;">RIWAYAT PERMINTAAN SAYA</p>
+    <div id="riwayat-permintaan-list" class="riwayat-list"></div>
+
+    <div id="admin-permintaan-section" class="hidden">
+      <p class="settings-label" style="margin:20px 0 8px;">PERMINTAAN MASUK (ADMIN)</p>
+      <div id="admin-permintaan-list" class="riwayat-list"></div>
+    </div>
   </main>
 
   <!-- Halaman: Profil Saya -->
@@ -963,6 +1022,7 @@ const pageTitles = {
   'buat-grup': 'Buat Grup Baru',
   'komunitas-list': 'Komunitas',
   'admin-panel': 'Panel Admin',
+  informasi: 'Informasi',
   soon: 'Segera Hadir'
 };
 function showPage(pageName){
@@ -1061,6 +1121,7 @@ function setupAuthScreen(){
     $('auth-title').textContent = 'Buat Akun';
     $('auth-desc').textContent = 'Daftar untuk mulai memakai TBR1 Digital.';
     $('field-nama').classList.remove('hidden');
+    $('field-panggilan').classList.remove('hidden');
     $('field-peran').classList.remove('hidden');
     $('field-sekolah').classList.remove('hidden');
     $('field-kelas').classList.add('hidden'); // baru muncul kalau peran = wali murid
@@ -1073,6 +1134,7 @@ function setupAuthScreen(){
     $('auth-title').textContent = 'Masuk';
     $('auth-desc').textContent = 'Masuk dengan akun TBR1 Digital kamu.';
     $('field-nama').classList.add('hidden');
+    $('field-panggilan').classList.add('hidden');
     $('field-peran').classList.add('hidden');
     $('field-sekolah').classList.add('hidden');
     $('field-kelas').classList.add('hidden');
@@ -1125,6 +1187,7 @@ function handleAuthSubmit(e){
   if(authMode === 'daftar'){
     // ---- Mode DAFTAR ----
     const nama = $('input-nama').value.trim();
+    const panggilan = $('input-panggilan').value.trim();
     const peran = $('input-peran').value;
     const kelas = $('input-kelas').value;
     const sekolah = $('input-sekolah').value.trim();
@@ -1132,6 +1195,11 @@ function handleAuthSubmit(e){
 
     if(!nama || !email || password.length < 6){
       errEl.textContent = 'Lengkapi nama, email, dan password minimal 6 karakter.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    if(!panggilan){
+      errEl.textContent = 'Isi nama panggilan dulu ya.';
       errEl.classList.remove('hidden');
       return;
     }
@@ -1161,8 +1229,8 @@ function handleAuthSubmit(e){
           throw { code:'custom/registration-closed' };
         }
         const profile = isMasterAdmin
-          ? { nama, email, peran:'admin', sekolah:'SDN TAMBERU 1', approved:true, kelas:null, nip:'', nuptk:'', hp:'', alamat:'' }
-          : { nama, email, peran, sekolah, approved:isSekolahUtama(sekolah), kelas: peran === 'wali_murid' ? kelas : null, nip:'', nuptk:'', hp:'', alamat:'' };
+          ? { nama, panggilan, email, peran:'admin', sekolah:'SDN TAMBERU 1', approved:true, kelas:null, nip:'', nuptk:'', hp:'', alamat:'' }
+          : { nama, panggilan, email, peran, sekolah, approved:isSekolahUtama(sekolah), kelas: peran === 'wali_murid' ? kelas : null, nip:'', nuptk:'', hp:'', alamat:'' };
         return auth.createUserWithEmailAndPassword(email, password).then(cred => {
           return saveProfileToFirestore(cred.user.uid, profile).then(() => {
             currentProfile = { uid: cred.user.uid, ...profile };
@@ -2037,6 +2105,120 @@ function handleKickUser(uid){
 }
 
 /* ============================================================
+   INFORMASI - minta data guru lewat nama panggilan, via persetujuan Admin
+   ============================================================ */
+const CARA_PAKAI_INFORMASI = 'Cara pakai:\n\n1. Ketik nama PANGGILAN orang yang datanya kamu perlukan (misal: Aji), lalu Kirim Permintaan.\n2. Admin sekolah akan meninjau permintaan itu dan mengetik jawabannya sendiri.\n3. Setelah dijawab, balasannya akan muncul di "Riwayat Permintaan Saya" di halaman ini.\n\nIni bukan chat langsung - datanya baru terkirim setelah disetujui Admin.';
+
+function goToInformasi(){
+  const acc = getAccount();
+  if(!acc) return;
+  showPage('informasi');
+  renderRiwayatSaya();
+  if(acc.peran === 'admin'){
+    $('admin-permintaan-section').classList.remove('hidden');
+    renderAdminPermintaan();
+  } else {
+    $('admin-permintaan-section').classList.add('hidden');
+  }
+}
+
+function handleMintaDataSubmit(e){
+  e.preventDefault();
+  const acc = getAccount();
+  const panggilan = $('input-panggilan-target').value.trim();
+  if(!panggilan || !acc) return;
+
+  db.collection('dataRequests').add({
+    fromUid: acc.uid,
+    fromNama: acc.nama,
+    targetPanggilan: panggilan,
+    status: 'pending',
+    jawaban: '',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(() => {
+    $('input-panggilan-target').value = '';
+    showToast('Permintaan terkirim, menunggu Admin.');
+    renderRiwayatSaya();
+  }).catch(() => showToast('Gagal mengirim permintaan.'));
+}
+
+function renderRiwayatSaya(){
+  const acc = getAccount();
+  const list = $('riwayat-permintaan-list');
+  list.innerHTML = '<p class="muted small">Memuat riwayat...</p>';
+  db.collection('dataRequests').where('fromUid', '==', acc.uid).get().then(snap => {
+    if(snap.empty){ list.innerHTML = '<p class="muted small">Belum pernah minta data.</p>'; return; }
+    const docs = snap.docs.slice().sort((a,b) => (b.data().createdAt?.toMillis()||0) - (a.data().createdAt?.toMillis()||0));
+    list.innerHTML = '';
+    docs.forEach(doc => {
+      const r = doc.data();
+      const badgeClass = r.status === 'dijawab' ? 'aktif' : (r.status === 'ditolak' ? 'kicked' : 'pending');
+      const badgeText = r.status === 'dijawab' ? 'Dijawab' : (r.status === 'ditolak' ? 'Ditolak' : 'Menunggu');
+      const card = document.createElement('div');
+      card.className = 'riwayat-card';
+      card.innerHTML = `
+        <div class="riwayat-top">
+          <div>
+            <div class="riwayat-nama">Panggilan: ${r.targetPanggilan}</div>
+          </div>
+          <span class="admin-status-badge ${badgeClass}">${badgeText}</span>
+        </div>
+        ${r.jawaban ? `<div class="riwayat-jawaban">${(r.jawaban||'').replace(/</g,'&lt;')}</div>` : ''}`;
+      list.appendChild(card);
+    });
+  }).catch(() => { list.innerHTML = '<p class="muted small">Gagal memuat riwayat.</p>'; });
+}
+
+function renderAdminPermintaan(){
+  const list = $('admin-permintaan-list');
+  list.innerHTML = '<p class="muted small">Memuat permintaan masuk...</p>';
+  db.collection('dataRequests').where('status', '==', 'pending').get().then(snap => {
+    if(snap.empty){ list.innerHTML = '<p class="muted small">Tidak ada permintaan menunggu.</p>'; return; }
+    list.innerHTML = '';
+    snap.forEach(doc => {
+      const r = doc.data();
+      const id = doc.id;
+      const card = document.createElement('div');
+      card.className = 'riwayat-card';
+      card.innerHTML = `
+        <div class="riwayat-top">
+          <div>
+            <div class="riwayat-nama">${r.fromNama || '(?)'} minta data:</div>
+            <div class="riwayat-detail">Panggilan dicari: <b>${r.targetPanggilan}</b></div>
+          </div>
+          <span class="admin-status-badge pending">Menunggu</span>
+        </div>
+        <div class="riwayat-jawab-form">
+          <textarea placeholder="Ketik jawaban/data yang mau dikirim..." id="jawab-${id}"></textarea>
+          <div class="riwayat-jawab-actions">
+            <button type="button" class="admin-btn approve" data-id="${id}" data-aksi="jawab">Kirim Jawaban</button>
+            <button type="button" class="admin-btn kick" data-id="${id}" data-aksi="tolak">Tolak</button>
+          </div>
+        </div>`;
+      list.appendChild(card);
+    });
+  }).catch(() => { list.innerHTML = '<p class="muted small">Gagal memuat permintaan.</p>'; });
+}
+
+function handleJawabPermintaan(id){
+  const teks = $('jawab-' + id).value.trim();
+  if(!teks){ showToast('Isi jawabannya dulu.'); return; }
+  const acc = getAccount();
+  db.collection('dataRequests').doc(id).update({
+    status: 'dijawab', jawaban: teks, answeredBy: acc.nama,
+    answeredAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(() => { showToast('Jawaban terkirim.'); renderAdminPermintaan(); })
+    .catch(() => showToast('Gagal mengirim jawaban.'));
+}
+
+function handleTolakPermintaan(id){
+  if(!confirm('Tolak permintaan ini?')) return;
+  db.collection('dataRequests').doc(id).update({ status:'ditolak' })
+    .then(() => { showToast('Permintaan ditolak.'); renderAdminPermintaan(); })
+    .catch(() => showToast('Gagal menolak permintaan.'));
+}
+
+/* ============================================================
    KOMUNITAS (DUMMY) - forum per kelas, belum tersambung antar HP
    ============================================================ */
 const KEY_KOMUNITAS_EXTRA = 'tbr1_komunitas_extra';
@@ -2284,7 +2466,17 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // Notif bell (placeholder untuk sekarang)
-  $('btn-notif').addEventListener('click', () => showToast('Belum ada notifikasi baru.'));
+  $('btn-notif').addEventListener('click', goToInformasi);
+
+  // Halaman Informasi
+  $('minta-data-form').addEventListener('submit', handleMintaDataSubmit);
+  $('btn-info-cara').addEventListener('click', () => alert(CARA_PAKAI_INFORMASI));
+  $('admin-permintaan-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('.admin-btn');
+    if(!btn) return;
+    if(btn.dataset.aksi === 'jawab') handleJawabPermintaan(btn.dataset.id);
+    if(btn.dataset.aksi === 'tolak') handleTolakPermintaan(btn.dataset.id);
+  });
 
   // Form profil
   $('profil-form').addEventListener('submit', handleProfilSubmit);
