@@ -781,6 +781,10 @@ body{
     <div id="admin-permintaan-section" class="hidden">
       <p class="settings-label" style="margin:20px 0 8px;">PERMINTAAN MASUK (ADMIN)</p>
       <div id="admin-permintaan-list" class="riwayat-list"></div>
+
+      <p class="settings-label" style="margin:20px 0 8px;">👥 ANGGOTA - KELOLA INFO</p>
+      <p class="muted small" style="margin-bottom:8px;">Isi info tiap akun di sini, biar Admin tinggal pakai pas ada yang minta data.</p>
+      <div id="admin-anggota-list" class="riwayat-list"></div>
     </div>
   </main>
 
@@ -2117,6 +2121,7 @@ function goToInformasi(){
   if(acc.peran === 'admin'){
     $('admin-permintaan-section').classList.remove('hidden');
     renderAdminPermintaan();
+    renderAdminAnggotaList();
   } else {
     $('admin-permintaan-section').classList.add('hidden');
   }
@@ -2172,24 +2177,37 @@ function renderRiwayatSaya(){
 function renderAdminPermintaan(){
   const list = $('admin-permintaan-list');
   list.innerHTML = '<p class="muted small">Memuat permintaan masuk...</p>';
-  db.collection('dataRequests').where('status', '==', 'pending').get().then(snap => {
-    if(snap.empty){ list.innerHTML = '<p class="muted small">Tidak ada permintaan menunggu.</p>'; return; }
+  Promise.all([
+    db.collection('dataRequests').where('status', '==', 'pending').get(),
+    db.collection('users').get()
+  ]).then(([reqSnap, userSnap]) => {
+    if(reqSnap.empty){ list.innerHTML = '<p class="muted small">Tidak ada permintaan menunggu.</p>'; return; }
+
+    // buat pencarian cepat: panggilan (huruf kecil) -> data user
+    const petaPanggilan = {};
+    userSnap.forEach(doc => {
+      const u = doc.data();
+      if(u.panggilan) petaPanggilan[u.panggilan.trim().toLowerCase()] = u;
+    });
+
     list.innerHTML = '';
-    snap.forEach(doc => {
+    reqSnap.forEach(doc => {
       const r = doc.data();
       const id = doc.id;
+      const cocok = petaPanggilan[(r.targetPanggilan || '').trim().toLowerCase()];
+      const infoTersimpan = cocok ? (cocok.infoData || '') : '';
       const card = document.createElement('div');
       card.className = 'riwayat-card';
       card.innerHTML = `
         <div class="riwayat-top">
           <div>
             <div class="riwayat-nama">${r.fromNama || '(?)'} minta data:</div>
-            <div class="riwayat-detail">Panggilan dicari: <b>${r.targetPanggilan}</b></div>
+            <div class="riwayat-detail">Panggilan dicari: <b>${r.targetPanggilan}</b>${cocok ? ' → cocok: ' + cocok.nama : ' (akun tidak ketemu)'}</div>
           </div>
           <span class="admin-status-badge pending">Menunggu</span>
         </div>
         <div class="riwayat-jawab-form">
-          <textarea placeholder="Ketik jawaban/data yang mau dikirim..." id="jawab-${id}"></textarea>
+          <textarea placeholder="Ketik jawaban/data yang mau dikirim..." id="jawab-${id}">${infoTersimpan.replace(/</g,'&lt;')}</textarea>
           <div class="riwayat-jawab-actions">
             <button type="button" class="admin-btn approve" data-id="${id}" data-aksi="jawab">Kirim Jawaban</button>
             <button type="button" class="admin-btn kick" data-id="${id}" data-aksi="tolak">Tolak</button>
@@ -2198,6 +2216,40 @@ function renderAdminPermintaan(){
       list.appendChild(card);
     });
   }).catch(() => { list.innerHTML = '<p class="muted small">Gagal memuat permintaan.</p>'; });
+}
+
+function renderAdminAnggotaList(){
+  const list = $('admin-anggota-list');
+  list.innerHTML = '<p class="muted small">Memuat anggota...</p>';
+  db.collection('users').get().then(snap => {
+    if(snap.empty){ list.innerHTML = '<p class="muted small">Belum ada anggota.</p>'; return; }
+    list.innerHTML = '';
+    snap.forEach(doc => {
+      const u = doc.data();
+      const uid = doc.id;
+      const card = document.createElement('div');
+      card.className = 'riwayat-card';
+      card.innerHTML = `
+        <div class="riwayat-top">
+          <div>
+            <div class="riwayat-nama">${u.nama || '(Tanpa nama)'} ${u.panggilan ? '(' + u.panggilan + ')' : ''}</div>
+            <div class="riwayat-detail">${ROLE_LABEL[u.peran] || u.peran || ''}</div>
+          </div>
+          <button type="button" class="admin-btn approve" data-uid="${uid}" data-aksi="edit-info" style="flex:none;padding:8px 14px;">✏️ Edit Info</button>
+        </div>
+        ${u.infoData ? `<div class="riwayat-jawaban">${u.infoData.replace(/</g,'&lt;')}</div>` : ''}`;
+      list.appendChild(card);
+    });
+  }).catch(() => { list.innerHTML = '<p class="muted small">Gagal memuat anggota.</p>'; });
+}
+
+function handleEditInfoAnggota(uid, namaSaatIni, infoSaatIni){
+  const infoBaru = prompt('Info untuk ' + namaSaatIni + ':', infoSaatIni || '');
+  if(infoBaru === null) return;
+  db.collection('users').doc(uid).update({ infoData: infoBaru }).then(() => {
+    showToast('Info berhasil disimpan.');
+    renderAdminAnggotaList();
+  }).catch(() => showToast('Gagal menyimpan info.'));
 }
 
 function handleJawabPermintaan(id){
@@ -2476,6 +2528,15 @@ window.addEventListener('DOMContentLoaded', () => {
     if(!btn) return;
     if(btn.dataset.aksi === 'jawab') handleJawabPermintaan(btn.dataset.id);
     if(btn.dataset.aksi === 'tolak') handleTolakPermintaan(btn.dataset.id);
+  });
+
+  $('admin-anggota-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('.admin-btn[data-aksi="edit-info"]');
+    if(!btn) return;
+    const card = btn.closest('.riwayat-card');
+    const namaEl = card ? card.querySelector('.riwayat-nama') : null;
+    const infoEl = card ? card.querySelector('.riwayat-jawaban') : null;
+    handleEditInfoAnggota(btn.dataset.uid, namaEl ? namaEl.textContent : '', infoEl ? infoEl.textContent : '');
   });
 
   // Form profil
