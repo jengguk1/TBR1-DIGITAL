@@ -802,6 +802,7 @@ body{
     </div>
     <form id="profil-form">
       <div class="field"><label>Nama Lengkap</label><input type="text" id="p-nama"></div>
+      <div class="field"><label>Nama Panggilan</label><input type="text" id="p-panggilan" placeholder="Contoh: Aji"></div>
       <div class="field"><label>NIP</label><input type="text" id="p-nip" placeholder="Opsional"></div>
       <div class="field"><label>NUPTK</label><input type="text" id="p-nuptk" placeholder="Opsional"></div>
       <div class="field"><label>No. HP</label><input type="text" id="p-hp" placeholder="Opsional"></div>
@@ -1096,6 +1097,7 @@ function fillProfileForm(){
   $('profil-peran').textContent = roleText;
 
   $('p-nama').value = acc.nama || '';
+  $('p-panggilan').value = acc.panggilan || '';
   $('p-nip').value = acc.nip || '';
   $('p-nuptk').value = acc.nuptk || '';
   $('p-hp').value = acc.hp || '';
@@ -1397,6 +1399,7 @@ function handleProfilSubmit(e){
 
   const updated = {
     nama: $('p-nama').value.trim() || acc.nama,
+    panggilan: $('p-panggilan').value.trim(),
     nip: $('p-nip').value.trim(),
     nuptk: $('p-nuptk').value.trim(),
     hp: $('p-hp').value.trim(),
