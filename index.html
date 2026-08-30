@@ -812,16 +812,28 @@ body{
   </main>
 
   <!-- Halaman: Dokumen Saya (kerangka awal) -->
-  <!-- Halaman: Dokumen Saya - daftar kategori (laci arsip) -->
+  <!-- Halaman: Dokumen - 4 Laci utama -->
   <main id="page-dokumen" class="page">
     <p class="muted small" id="dokumen-milik-siapa" style="margin-bottom:10px;"></p>
-    <div id="kategori-dokumen-grid" class="menu-grid"></div>
+    <div id="laci-utama-grid" class="menu-grid"></div>
   </main>
 
-  <!-- Halaman: Isi 1 kategori dokumen -->
+  <!-- Halaman: Laci Perangkat Ajar - pilih kelas -->
+  <main id="page-dokumen-kelas" class="page">
+    <div id="laci-kelas-grid" class="menu-grid"></div>
+  </main>
+
+  <!-- Halaman: Isi 1 laci/kategori (dipakai bareng utk semua laci) -->
   <main id="page-dokumen-isi" class="page">
-    <button class="btn-buat-grup" id="btn-upload-dokumen">➕ Upload File</button>
-    <input type="file" id="dokumen-file-input" style="display:none;" accept=".pdf,image/*">
+    <div id="dokumen-tambah-wrap" class="hidden">
+      <button class="btn-buat-grup" id="btn-buka-form-tambah">➕ Tambah Link Dokumen</button>
+      <form id="tambah-dokumen-form" class="hidden minta-data-form" style="margin-top:8px;">
+        <input type="text" id="dokumen-nama-input" placeholder="Nama/label file, mis: SK CPNS 2005" required>
+        <input type="url" id="dokumen-link-input" placeholder="Tempel link Google Drive di sini" required style="margin-top:8px;">
+        <p class="field-hint">ⓘ Di Google Drive: tap titik tiga di file → Share/Bagikan → ubah jadi "Anyone with the link" → Copy link → tempel di sini.</p>
+        <button type="submit" class="btn-primary" style="margin-top:8px;">Simpan</button>
+      </form>
+    </div>
     <div id="dokumen-file-list" class="riwayat-list" style="margin-top:12px;"></div>
   </main>
 
@@ -939,7 +951,6 @@ body{
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-storage-compat.js"></script>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyDkVmu88a5N37TMC02InBjBRxG6Cu8Jguw",
@@ -952,7 +963,6 @@ body{
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
   const db = firebase.firestore();
-  const storage = firebase.storage();
 </script>
 
 <script>
@@ -1035,6 +1045,7 @@ const pageTitles = {
   'komunitas-list': 'Komunitas',
   'admin-panel': 'Panel Admin',
   'dokumen-isi': 'Dokumen',
+  'dokumen-kelas': 'Perangkat Ajar',
   informasi: 'Informasi',
   soon: 'Segera Hadir'
 };
@@ -2285,11 +2296,21 @@ function handleTolakPermintaan(id){
 }
 
 /* ============================================================
-   DOKUMEN - arsip file per kategori, pakai Firebase Storage
+   DOKUMEN - 4 Laci: Data Pribadi, Perangkat Ajar, Prompt AI, Hiburan
+   Link Google Drive disimpan terpisah di sub-dokumen 'rahasia/link'
+   supaya bisa dikunci khusus laci Data Pribadi.
    ============================================================ */
-const KATEGORI_DOKUMEN = ['SK CPNS', 'SK PNS', 'SK Pangkat', 'Berkala', 'Sertifikat', 'Ijazah', 'Lainnya'];
+const LACI_LIST = [
+  { id:'pribadi', nama:'Data Pribadi', icon:'\ud83d\udd12' },
+  { id:'ajar', nama:'Perangkat Ajar', icon:'\ud83d\udcda' },
+  { id:'prompt', nama:'Prompt AI', icon:'\ud83e\udd16' },
+  { id:'hiburan', nama:'Hiburan / Lain-lain', icon:'\ud83c\udf89' }
+];
+const KELAS_DOKUMEN = ['Kelas 1','Kelas 2','Kelas 3','Kelas 4','Kelas 5','Kelas 6'];
+
 let dokumenTargetUid = null;
 let dokumenTargetNama = '';
+let dokumenLaciAktif = null;
 let dokumenKategoriAktif = null;
 
 function goToDokumen(targetUid, targetNama){
@@ -2297,116 +2318,139 @@ function goToDokumen(targetUid, targetNama){
   if(!acc) return;
   dokumenTargetUid = targetUid || acc.uid;
   dokumenTargetNama = targetUid ? (targetNama || '') : 'Saya';
-  $('dokumen-milik-siapa').textContent = targetUid ? ('📁 Dokumen milik: ' + dokumenTargetNama) : '';
+  $('dokumen-milik-siapa').textContent = targetUid ? ('\ud83d\udcc1 Dokumen milik: ' + dokumenTargetNama) : '';
   showPage('dokumen');
-  renderKategoriDokumen();
+  renderLaciUtama();
 }
 
-function renderKategoriDokumen(){
-  const grid = $('kategori-dokumen-grid');
+function renderLaciUtama(){
+  const grid = $('laci-utama-grid');
   grid.innerHTML = '';
-  KATEGORI_DOKUMEN.forEach(kat => {
+  LACI_LIST.forEach(laci => {
     const btn = document.createElement('button');
     btn.className = 'menu-card';
-    btn.innerHTML = `<span class="menu-icon">🗄️</span> ${kat} <span class="muted small" id="jumlah-${kat.replace(/\s/g,'_')}"></span>`;
-    btn.addEventListener('click', () => bukaKategoriDokumen(kat));
+    btn.innerHTML = '<span class="menu-icon">' + laci.icon + '</span> ' + laci.nama;
+    btn.addEventListener('click', () => {
+      if(laci.id === 'ajar'){
+        showPage('dokumen-kelas');
+        renderLaciKelas();
+      } else {
+        bukaDokumenIsi(laci.id, null, laci.nama);
+      }
+    });
     grid.appendChild(btn);
   });
-  db.collection('documents').where('uid', '==', dokumenTargetUid).get().then(snap => {
-    const jumlah = {};
-    snap.forEach(doc => {
-      const k = doc.data().kategori;
-      jumlah[k] = (jumlah[k] || 0) + 1;
-    });
-    KATEGORI_DOKUMEN.forEach(kat => {
-      const el = document.getElementById('jumlah-' + kat.replace(/\s/g,'_'));
-      if(el && jumlah[kat]) el.textContent = '(' + jumlah[kat] + ')';
-    });
-  }).catch(() => {});
 }
 
-function bukaKategoriDokumen(kategori){
+function renderLaciKelas(){
+  const grid = $('laci-kelas-grid');
+  grid.innerHTML = '';
+  KELAS_DOKUMEN.forEach(kelas => {
+    const btn = document.createElement('button');
+    btn.className = 'menu-card';
+    btn.innerHTML = '<span class="menu-icon">\ud83d\udcda</span> ' + kelas;
+    btn.addEventListener('click', () => bukaDokumenIsi('ajar', kelas, 'Perangkat Ajar - ' + kelas));
+    grid.appendChild(btn);
+  });
+}
+
+function bukaDokumenIsi(laci, kategori, judul){
+  dokumenLaciAktif = laci;
   dokumenKategoriAktif = kategori;
   showPage('dokumen-isi');
-  $('header-title').textContent = kategori;
+  $('header-title').textContent = judul;
+
+  const acc = getAccount();
+  $('tambah-dokumen-form').classList.add('hidden');
+  $('dokumen-nama-input').value = '';
+  $('dokumen-link-input').value = '';
+
+  const bolehTambah = (laci === 'pribadi')
+    ? (dokumenTargetUid === acc.uid || acc.peran === 'admin')
+    : (acc.peran === 'admin');
+  $('dokumen-tambah-wrap').classList.toggle('hidden', !bolehTambah);
+
   renderDokumenFileList();
 }
 
 function renderDokumenFileList(){
   const list = $('dokumen-file-list');
-  list.innerHTML = '<p class="muted small">Memuat file...</p>';
-  db.collection('documents')
-    .where('uid', '==', dokumenTargetUid)
-    .where('kategori', '==', dokumenKategoriAktif)
-    .get().then(snap => {
-      if(snap.empty){ list.innerHTML = '<p class="muted small">Belum ada file di kategori ini.</p>'; return; }
-      list.innerHTML = '';
-      const acc = getAccount();
-      const bolehHapus = dokumenTargetUid === acc.uid;
-      snap.forEach(doc => {
-        const d = doc.data();
-        const ukuranKb = d.ukuran ? Math.round(d.ukuran / 1024) + ' KB' : '';
-        const card = document.createElement('div');
-        card.className = 'riwayat-card';
-        card.innerHTML = `
-          <div class="riwayat-top">
-            <div>
-              <div class="riwayat-nama">📄 ${d.namaFile || 'File'}</div>
-              <div class="riwayat-detail">${ukuranKb}</div>
-            </div>
-          </div>
-          <div class="riwayat-jawab-actions">
-            <a href="${d.downloadUrl}" target="_blank" class="admin-btn approve" style="text-decoration:none;text-align:center;">⬇ Buka/Download</a>
-            ${bolehHapus ? `<button type="button" class="admin-btn kick" data-id="${doc.id}" data-path="${d.storagePath}">🗑️ Hapus</button>` : ''}
-          </div>`;
-        list.appendChild(card);
-      });
-    }).catch(() => { list.innerHTML = '<p class="muted small">Gagal memuat file.</p>'; });
-}
-
-function handleUploadDokumen(e){
-  const file = e.target.files[0];
-  if(!file) return;
+  list.innerHTML = '<p class="muted small">Memuat...</p>';
   const acc = getAccount();
-  if(dokumenTargetUid !== acc.uid){
-    showToast('Cuma pemilik akun yang bisa upload dokumennya sendiri.');
-    e.target.value = '';
-    return;
+
+  let query = db.collection('documents').where('laci', '==', dokumenLaciAktif);
+  if(dokumenLaciAktif === 'pribadi'){
+    query = query.where('uid', '==', dokumenTargetUid);
+  } else if(dokumenLaciAktif === 'ajar'){
+    query = query.where('kategori', '==', dokumenKategoriAktif);
   }
-  if(file.size > 10 * 1024 * 1024){
-    showToast('File maksimal 10 MB.');
-    e.target.value = '';
-    return;
-  }
-  showToast('Mengupload file...');
-  const namaFile = Date.now() + '_' + file.name;
-  const storagePath = 'documents/' + acc.uid + '/' + dokumenKategoriAktif + '/' + namaFile;
-  const ref = storage.ref().child(storagePath);
-  ref.put(file).then(snapshot => {
-    return snapshot.ref.getDownloadURL();
-  }).then(url => {
-    return db.collection('documents').add({
-      uid: acc.uid,
-      kategori: dokumenKategoriAktif,
-      namaFile: file.name,
-      storagePath: storagePath,
-      downloadUrl: url,
-      ukuran: file.size,
-      uploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+
+  query.get().then(snap => {
+    if(snap.empty){ list.innerHTML = '<p class="muted small">Belum ada dokumen di sini.</p>'; return; }
+    list.innerHTML = '';
+    snap.forEach(doc => {
+      const d = doc.data();
+      const docId = doc.id;
+      const bolehHapus = d.uid === acc.uid || acc.peran === 'admin';
+      const card = document.createElement('div');
+      card.className = 'riwayat-card';
+      card.innerHTML = '<div class="riwayat-top"><div><div class="riwayat-nama">\ud83d\udcc4 ' + (d.namaFile || 'File') + '</div></div></div>' +
+        '<div class="riwayat-jawab-actions">' +
+        '<button type="button" class="admin-btn approve" data-id="' + docId + '" data-aksi="buka">\ud83d\udd17 Buka</button>' +
+        (bolehHapus ? '<button type="button" class="admin-btn kick" data-id="' + docId + '" data-aksi="hapus">\ud83d\uddd1\ufe0f Hapus</button>' : '') +
+        '</div>';
+      list.appendChild(card);
     });
-  }).then(() => {
-    showToast('File berhasil diupload.');
-    renderDokumenFileList();
-  }).catch(() => showToast('Gagal upload file, cek koneksi internet.'));
-  e.target.value = '';
+  }).catch(() => { list.innerHTML = '<p class="muted small">Gagal memuat dokumen.</p>'; });
 }
 
-function handleHapusDokumen(docId, storagePath){
-  if(!confirm('Hapus file ini?')) return;
-  storage.ref().child(storagePath).delete().catch(() => {}) // lanjut walau file storage-nya sudah hilang duluan
+function handleBukaDokumen(docId){
+  db.collection('documents').doc(docId).collection('rahasia').doc('link').get()
+    .then(doc => {
+      if(doc.exists && doc.data().driveLink){
+        window.open(doc.data().driveLink, '_blank');
+      } else {
+        showToast('Link tidak ditemukan.');
+      }
+    })
+    .catch(() => showToast('\ud83d\udd12 Dokumen ini terkunci, kamu tidak punya akses.'));
+}
+
+function handleTambahDokumenSubmit(e){
+  e.preventDefault();
+  const acc = getAccount();
+  const nama = $('dokumen-nama-input').value.trim();
+  const link = $('dokumen-link-input').value.trim();
+  if(!nama || !link) return;
+
+  const uidPemilik = (dokumenLaciAktif === 'pribadi') ? dokumenTargetUid : acc.uid;
+  const docData = {
+    uid: uidPemilik,
+    laci: dokumenLaciAktif,
+    kategori: dokumenKategoriAktif || null,
+    namaFile: nama,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  const ref = db.collection('documents').doc();
+  ref.set(docData)
+    .then(() => ref.collection('rahasia').doc('link').set({ driveLink: link }))
+    .then(() => {
+      showToast('Dokumen berhasil ditambahkan.');
+      $('dokumen-nama-input').value = '';
+      $('dokumen-link-input').value = '';
+      $('tambah-dokumen-form').classList.add('hidden');
+      renderDokumenFileList();
+    })
+    .catch(() => showToast('Gagal menyimpan dokumen.'));
+}
+
+function handleHapusDokumen(docId){
+  if(!confirm('Hapus dokumen ini?')) return;
+  db.collection('documents').doc(docId).collection('rahasia').doc('link').delete().catch(() => {})
     .then(() => db.collection('documents').doc(docId).delete())
-    .then(() => { showToast('File dihapus.'); renderDokumenFileList(); })
-    .catch(() => showToast('Gagal menghapus file.'));
+    .then(() => { showToast('Dokumen dihapus.'); renderDokumenFileList(); })
+    .catch(() => showToast('Gagal menghapus dokumen.'));
 }
 
 /* ============================================================
@@ -2527,8 +2571,18 @@ function handleBackClick(){
     return;
   }
   if(id === 'dokumen-isi'){
+    if(dokumenLaciAktif === 'ajar'){
+      showPage('dokumen-kelas');
+      renderLaciKelas();
+    } else {
+      showPage('dokumen');
+      renderLaciUtama();
+    }
+    return;
+  }
+  if(id === 'dokumen-kelas'){
     showPage('dokumen');
-    renderKategoriDokumen();
+    renderLaciUtama();
     return;
   }
   showPage('dashboard');
@@ -2676,13 +2730,16 @@ window.addEventListener('DOMContentLoaded', () => {
     if(btn.dataset.aksi === 'tolak') handleTolakPermintaan(btn.dataset.id);
   });
 
-  // Dokumen: upload & hapus file
-  $('btn-upload-dokumen').addEventListener('click', () => $('dokumen-file-input').click());
-  $('dokumen-file-input').addEventListener('change', handleUploadDokumen);
+  // Dokumen: tambah link, buka, hapus
+  $('btn-buka-form-tambah').addEventListener('click', () => {
+    $('tambah-dokumen-form').classList.toggle('hidden');
+  });
+  $('tambah-dokumen-form').addEventListener('submit', handleTambahDokumenSubmit);
   $('dokumen-file-list').addEventListener('click', (e) => {
-    const btn = e.target.closest('.admin-btn.kick');
-    if(!btn) return;
-    handleHapusDokumen(btn.dataset.id, btn.dataset.path);
+    const bukaBtn = e.target.closest('.admin-btn[data-aksi="buka"]');
+    const hapusBtn = e.target.closest('.admin-btn[data-aksi="hapus"]');
+    if(bukaBtn) handleBukaDokumen(bukaBtn.dataset.id);
+    if(hapusBtn) handleHapusDokumen(hapusBtn.dataset.id);
   });
 
   $('admin-anggota-list').addEventListener('click', (e) => {
