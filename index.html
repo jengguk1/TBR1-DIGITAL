@@ -209,6 +209,17 @@ body{
 .riwayat-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
 .riwayat-nama{font-weight:700;font-size:13.5px;}
 .riwayat-detail{font-size:12px;color:var(--gray-500);margin:2px 0 6px;}
+.pengumuman-penting{
+  border:1.5px solid #E0333F;
+  background:#FFF5F5;
+}
+.badge-penting{
+  display:inline-block;
+  background:#E0333F;color:var(--white);
+  font-size:10px;font-weight:700;
+  padding:3px 10px;border-radius:20px;
+  margin-bottom:6px;
+}
 .riwayat-jawaban{
   font-size:13px;background:var(--white);
   border-radius:8px;padding:8px 10px;margin-top:6px;
@@ -739,8 +750,8 @@ body{
       <button class="menu-card" data-page="chat">
         <span class="menu-icon">💬</span> Chat <span class="chat-global-dot" style="display:none;"></span>
       </button>
-      <button class="menu-card soon" data-page="soon">
-        <span class="menu-icon">📢</span> Pengumuman <span class="badge-soon">Segera</span>
+      <button class="menu-card" data-page="pengumuman">
+        <span class="menu-icon">📢</span> Pengumuman
       </button>
       <button class="menu-card" data-page="komunitas">
         <span class="menu-icon">👥</span> Komunitas <span class="badge-soon">Segera</span>
@@ -920,6 +931,20 @@ body{
     </form>
   </main>
 
+  <!-- Halaman: Pengumuman -->
+  <main id="page-pengumuman" class="page">
+    <button class="btn-buat-grup hidden" id="btn-buat-pengumuman">➕ Buat Pengumuman</button>
+    <form id="buat-pengumuman-form" class="hidden minta-data-form" style="margin-top:8px;">
+      <input type="text" id="pengumuman-judul-input" placeholder="Judul pengumuman" required>
+      <textarea id="pengumuman-isi-input" placeholder="Isi pengumuman..." rows="4" style="margin-top:8px;width:100%;padding:10px 14px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);font-size:14px;background:var(--purple-050);resize:vertical;" required></textarea>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;">
+        <input type="checkbox" id="pengumuman-penting-input" style="width:18px;height:18px;accent-color:var(--purple-700);"> Tandai <b>PENTING</b>
+      </label>
+      <button type="submit" class="btn-primary" style="margin-top:8px;">Kirim Pengumuman</button>
+    </form>
+    <div id="pengumuman-list" class="riwayat-list" style="margin-top:12px;"></div>
+  </main>
+
   <!-- Halaman placeholder untuk fitur yang belum dibangun -->
   <main id="page-soon" class="page">
     <div class="empty-state">
@@ -933,7 +958,7 @@ body{
   <nav class="bottom-nav">
     <button class="nav-item active" data-page="dashboard"><span>🏠</span>Beranda</button>
     <button class="nav-item" data-page="chat"><span class="nav-icon-wrap">💬<span class="chat-global-dot nav-dot" style="display:none;"></span></span>Chat</button>
-    <button class="nav-item" data-page="soon"><span>📢</span>Pengumuman</button>
+    <button class="nav-item" data-page="pengumuman"><span>📢</span>Pengumuman</button>
     <button class="nav-item" data-page="profil"><span>👤</span>Profil</button>
   </nav>
 </section>
@@ -1046,6 +1071,7 @@ const pageTitles = {
   'admin-panel': 'Panel Admin',
   'dokumen-isi': 'Dokumen',
   'dokumen-kelas': 'Perangkat Ajar',
+  pengumuman: 'Pengumuman',
   informasi: 'Informasi',
   soon: 'Segera Hadir'
 };
@@ -2454,6 +2480,73 @@ function handleHapusDokumen(docId){
 }
 
 /* ============================================================
+   PENGUMUMAN - Admin & Guru bisa buat, semua orang bisa baca
+   ============================================================ */
+function goToPengumuman(){
+  const acc = getAccount();
+  if(!acc) return;
+  showPage('pengumuman');
+  const bolehBuat = acc.peran === 'admin' || acc.peran === 'guru';
+  $('btn-buat-pengumuman').classList.toggle('hidden', !bolehBuat);
+  $('buat-pengumuman-form').classList.add('hidden');
+  renderPengumumanList();
+}
+
+function renderPengumumanList(){
+  const list = $('pengumuman-list');
+  list.innerHTML = '<p class="muted small">Memuat pengumuman...</p>';
+  db.collection('pengumuman').orderBy('createdAt', 'desc').get().then(snap => {
+    if(snap.empty){ list.innerHTML = '<p class="muted small">Belum ada pengumuman.</p>'; return; }
+    list.innerHTML = '';
+    const acc = getAccount();
+    snap.forEach(doc => {
+      const p = doc.data();
+      const bolehHapus = p.posterUid === acc.uid || acc.peran === 'admin';
+      const jam = p.createdAt ? formatJamChat(p.createdAt.toDate()) : '...';
+      const card = document.createElement('div');
+      card.className = 'riwayat-card' + (p.penting ? ' pengumuman-penting' : '');
+      card.innerHTML = (p.penting ? '<span class="badge-penting">⚠️ PENTING</span>' : '') +
+        '<div class="riwayat-nama">' + (p.judul || '(Tanpa judul)') + '</div>' +
+        '<p style="font-size:13.5px;margin:6px 0;white-space:pre-wrap;">' + (p.isi || '').replace(/</g,'&lt;') + '</p>' +
+        '<div class="riwayat-detail">' + (p.posterNama || '?') + ' (' + (ROLE_LABEL[p.posterPeran] || '') + ') \u00b7 ' + jam + '</div>' +
+        (bolehHapus ? '<div class="riwayat-jawab-actions" style="margin-top:8px;"><button type="button" class="admin-btn kick" data-id="' + doc.id + '">\ud83d\uddd1\ufe0f Hapus</button></div>' : '');
+      list.appendChild(card);
+    });
+  }).catch(() => { list.innerHTML = '<p class="muted small">Gagal memuat pengumuman.</p>'; });
+}
+
+function handleBuatPengumumanSubmit(e){
+  e.preventDefault();
+  const acc = getAccount();
+  const judul = $('pengumuman-judul-input').value.trim();
+  const isi = $('pengumuman-isi-input').value.trim();
+  const penting = $('pengumuman-penting-input').checked;
+  if(!judul || !isi) return;
+
+  db.collection('pengumuman').add({
+    judul, isi, penting,
+    posterUid: acc.uid,
+    posterNama: acc.nama,
+    posterPeran: acc.peran,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(() => {
+    showToast('Pengumuman berhasil dikirim.');
+    $('pengumuman-judul-input').value = '';
+    $('pengumuman-isi-input').value = '';
+    $('pengumuman-penting-input').checked = false;
+    $('buat-pengumuman-form').classList.add('hidden');
+    renderPengumumanList();
+  }).catch(() => showToast('Gagal mengirim pengumuman.'));
+}
+
+function handleHapusPengumuman(id){
+  if(!confirm('Hapus pengumuman ini?')) return;
+  db.collection('pengumuman').doc(id).delete()
+    .then(() => { showToast('Pengumuman dihapus.'); renderPengumumanList(); })
+    .catch(() => showToast('Gagal menghapus pengumuman.'));
+}
+
+/* ============================================================
    KOMUNITAS (DUMMY) - forum per kelas, belum tersambung antar HP
    ============================================================ */
 const KEY_KOMUNITAS_EXTRA = 'tbr1_komunitas_extra';
@@ -2655,6 +2748,8 @@ window.addEventListener('DOMContentLoaded', () => {
         goToAdminPanel();
       } else if(card.dataset.page === 'dokumen'){
         goToDokumen();
+      } else if(card.dataset.page === 'pengumuman'){
+        goToPengumuman();
       } else {
         showPage(card.dataset.page);
       }
@@ -2666,6 +2761,8 @@ window.addEventListener('DOMContentLoaded', () => {
     item.addEventListener('click', () => {
       if(item.dataset.page === 'chat'){
         goToChat();
+      } else if(item.dataset.page === 'pengumuman'){
+        goToPengumuman();
       } else {
         showPage(item.dataset.page);
       }
@@ -2740,6 +2837,17 @@ window.addEventListener('DOMContentLoaded', () => {
     const hapusBtn = e.target.closest('.admin-btn[data-aksi="hapus"]');
     if(bukaBtn) handleBukaDokumen(bukaBtn.dataset.id);
     if(hapusBtn) handleHapusDokumen(hapusBtn.dataset.id);
+  });
+
+  // Pengumuman: buka form, kirim, hapus
+  $('btn-buat-pengumuman').addEventListener('click', () => {
+    $('buat-pengumuman-form').classList.toggle('hidden');
+  });
+  $('buat-pengumuman-form').addEventListener('submit', handleBuatPengumumanSubmit);
+  $('pengumuman-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('.admin-btn.kick');
+    if(!btn) return;
+    handleHapusPengumuman(btn.dataset.id);
   });
 
   $('admin-anggota-list').addEventListener('click', (e) => {
