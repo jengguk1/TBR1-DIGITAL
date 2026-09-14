@@ -754,7 +754,7 @@ body{
         <span class="menu-icon">📢</span> Pengumuman
       </button>
       <button class="menu-card" data-page="komunitas">
-        <span class="menu-icon">👥</span> Komunitas <span class="badge-soon">Segera</span>
+        <span class="menu-icon">👥</span> Komunitas
       </button>
       <button class="menu-card" data-page="pengaturan">
         <span class="menu-icon">⚙️</span> Pengaturan
@@ -916,14 +916,12 @@ body{
 
   <!-- Halaman: Komunitas - daftar kelas (untuk Guru/Admin/Kepala Sekolah) -->
   <main id="page-komunitas-list" class="page">
-    <p class="dummy-note">⚠️ Mode contoh: isi diskusi masih data contoh, belum tersambung ke HP lain.</p>
     <p class="muted small" style="margin-bottom:10px;">Pilih kelas untuk membuka komunitasnya:</p>
     <div id="kelas-list" class="chat-list"></div>
   </main>
 
   <!-- Halaman: Komunitas - feed diskusi 1 kelas -->
   <main id="page-komunitas-feed" class="page">
-    <p class="dummy-note">⚠️ Mode contoh: pesan yang kamu kirim hanya tersimpan di HP ini.</p>
     <div id="komunitas-posts" class="komunitas-posts"></div>
     <form id="komunitas-send-form" class="chat-input-bar">
       <input type="text" id="komunitas-input" placeholder="Tulis sesuatu ke komunitas..." autocomplete="off">
@@ -2547,32 +2545,11 @@ function handleHapusPengumuman(id){
 }
 
 /* ============================================================
-   KOMUNITAS (DUMMY) - forum per kelas, belum tersambung antar HP
+   KOMUNITAS (REAL) - forum per kelas, tersimpan di Firestore
+   Wali Murid cuma lihat kelas anaknya, Guru/Admin bisa lihat semua
    ============================================================ */
-const KEY_KOMUNITAS_EXTRA = 'tbr1_komunitas_extra';
-
-const KOMUNITAS_POSTS = {
-  'Kelas 1': [{ nama:'Bu Ida', peran:'Wali Kelas', teks:'Besok anak-anak bawa perlengkapan menggambar ya, Bu/Pak.', waktu:'Kemarin' }],
-  'Kelas 2': [{ nama:'Pak Joko', peran:'Wali Kelas', teks:'Ulangan Matematika digeser jadi hari Kamis.', waktu:'Kemarin' }],
-  'Kelas 3': [{ nama:'Bu Rina', peran:'Wali Kelas', teks:'Terima kasih untuk orang tua yang sudah ikut kerja bakti kemarin.', waktu:'2 hari lalu' }],
-  'Kelas 4': [{ nama:'Pak Aji', peran:'Wali Kelas', teks:'Mohon lunasi infaq study tour paling lambat Jumat ini.', waktu:'2 hari lalu' }],
-  'Kelas 5': [{ nama:'Bu Wati', peran:'Wali Kelas', teks:'Foto kegiatan class meeting sudah dibagikan di grup, silakan dicek.', waktu:'3 hari lalu' }],
-  'Kelas 6': [{ nama:'Pak Kepala Sekolah', peran:'Kepala Sekolah', teks:'Persiapan ujian kelas 6 dimulai minggu depan, mohon dukungan orang tua.', waktu:'3 hari lalu' }],
-};
-
+const DAFTAR_KELAS_KOMUNITAS = ['Kelas 1','Kelas 2','Kelas 3','Kelas 4','Kelas 5','Kelas 6'];
 let activeKelas = null;
-
-function getKomunitasExtra(){
-  const raw = localStorage.getItem(KEY_KOMUNITAS_EXTRA);
-  return raw ? JSON.parse(raw) : {};
-}
-function saveKomunitasExtra(data){
-  localStorage.setItem(KEY_KOMUNITAS_EXTRA, JSON.stringify(data));
-}
-function getKelasPosts(kelas){
-  const extra = getKomunitasExtra()[kelas] || [];
-  return [...(KOMUNITAS_POSTS[kelas] || []), ...extra];
-}
 
 // Menu Komunitas: Wali Murid langsung ke kelasnya, yang lain pilih dulu
 function goToKomunitas(){
@@ -2588,9 +2565,7 @@ function goToKomunitas(){
 function renderKelasList(){
   const list = $('kelas-list');
   list.innerHTML = '';
-  Object.keys(KOMUNITAS_POSTS).forEach(kelas => {
-    const posts = getKelasPosts(kelas);
-    const last = posts[posts.length - 1];
+  DAFTAR_KELAS_KOMUNITAS.forEach(kelas => {
     const btn = document.createElement('button');
     btn.className = 'chat-list-item';
     btn.innerHTML = `
@@ -2598,54 +2573,80 @@ function renderKelasList(){
       <div class="chat-list-info">
         <div class="chat-list-top">
           <span class="chat-list-name">${kelas}</span>
-          <span class="chat-list-time">${last ? last.waktu : ''}</span>
+          <span class="chat-list-time" id="pv-time-kelas-${kelas.replace(/\s/g,'_')}"></span>
         </div>
-        <p class="chat-list-preview">${last ? last.teks : 'Belum ada diskusi'}</p>
+        <p class="chat-list-preview" id="pv-text-kelas-${kelas.replace(/\s/g,'_')}">Memuat...</p>
       </div>`;
     btn.addEventListener('click', () => openKomunitasFeed(kelas));
     list.appendChild(btn);
+
+    db.collection('komunitasPosts').where('kelas', '==', kelas).orderBy('createdAt', 'desc').limit(1).get()
+      .then(snap => {
+        const elText = document.getElementById('pv-text-kelas-' + kelas.replace(/\s/g,'_'));
+        const elTime = document.getElementById('pv-time-kelas-' + kelas.replace(/\s/g,'_'));
+        if(!elText) return;
+        if(snap.empty){ elText.textContent = 'Belum ada diskusi'; return; }
+        const p = snap.docs[0].data();
+        elText.textContent = (p.posterNama ? p.posterNama + ': ' : '') + p.isi;
+        if(elTime && p.createdAt) elTime.textContent = formatJamChat(p.createdAt.toDate());
+      }).catch(() => {});
   });
 }
 
 function openKomunitasFeed(kelas){
   activeKelas = kelas;
-  renderKomunitasPosts();
   showPage('komunitas-feed');
   $('header-title').textContent = 'Komunitas ' + kelas;
+  renderKomunitasPosts();
 }
 
 function renderKomunitasPosts(){
   const box = $('komunitas-posts');
-  box.innerHTML = '';
-  getKelasPosts(activeKelas).forEach(p => {
-    const div = document.createElement('div');
-    div.className = 'komunitas-post';
-    div.innerHTML = `
-      <div class="komunitas-post-top">
-        <span><span class="komunitas-post-nama">${p.nama}</span><span class="komunitas-post-role">${p.peran}</span></span>
-        <span class="komunitas-post-time">${p.waktu}</span>
-      </div>
-      <p class="komunitas-post-text">${p.teks.replace(/</g,'&lt;')}</p>`;
-    box.appendChild(div);
-  });
-  box.scrollTop = box.scrollHeight;
+  box.innerHTML = '<p class="muted small" style="text-align:center;">Memuat diskusi...</p>';
+  db.collection('komunitasPosts').where('kelas', '==', activeKelas).orderBy('createdAt', 'asc').get()
+    .then(snap => {
+      box.innerHTML = '';
+      if(snap.empty){
+        box.innerHTML = '<p class="muted small" style="text-align:center;">Belum ada diskusi di kelas ini. Mulai yuk.</p>';
+        return;
+      }
+      snap.forEach(doc => {
+        const p = doc.data();
+        const jam = p.createdAt ? formatJamChat(p.createdAt.toDate()) : '...';
+        const div = document.createElement('div');
+        div.className = 'komunitas-post';
+        div.innerHTML = `
+          <div class="komunitas-post-top">
+            <span><span class="komunitas-post-nama">${p.posterNama || '?'}</span><span class="komunitas-post-role">${ROLE_LABEL[p.posterPeran] || ''}</span></span>
+            <span class="komunitas-post-time">${jam}</span>
+          </div>
+          <p class="komunitas-post-text">${(p.isi || '').replace(/</g,'&lt;')}</p>`;
+        box.appendChild(div);
+      });
+      box.scrollTop = box.scrollHeight;
+    }).catch(() => {
+      box.innerHTML = '<p class="muted small" style="text-align:center;">Gagal memuat diskusi.</p>';
+    });
 }
 
 function handleKirimKomunitas(e){
   e.preventDefault();
   const input = $('komunitas-input');
-  const teks = input.value.trim();
-  if(!teks || !activeKelas) return;
+  const isi = input.value.trim();
+  if(!isi || !activeKelas) return;
 
   const acc = getAccount();
-  const extra = getKomunitasExtra();
-  if(!extra[activeKelas]) extra[activeKelas] = [];
-  const jam = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
-  extra[activeKelas].push({ nama: acc.nama, peran: ROLE_LABEL[acc.peran] || '', teks, waktu: jam });
-  saveKomunitasExtra(extra);
-
   input.value = '';
-  renderKomunitasPosts();
+  db.collection('komunitasPosts').add({
+    kelas: activeKelas,
+    isi,
+    posterUid: acc.uid,
+    posterNama: acc.nama,
+    posterPeran: acc.peran,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(() => {
+    renderKomunitasPosts();
+  }).catch(() => showToast('Gagal mengirim, cek koneksi internet.'));
 }
 
 /* ---------- Tombol back di header: pintar sesuai halaman aktif ---------- */
