@@ -2580,16 +2580,20 @@ function renderKelasList(){
     btn.addEventListener('click', () => openKomunitasFeed(kelas));
     list.appendChild(btn);
 
-    db.collection('komunitasPosts').where('kelas', '==', kelas).orderBy('createdAt', 'desc').limit(1).get()
+    db.collection('komunitasPosts').where('kelas', '==', kelas).get()
       .then(snap => {
         const elText = document.getElementById('pv-text-kelas-' + kelas.replace(/\s/g,'_'));
         const elTime = document.getElementById('pv-time-kelas-' + kelas.replace(/\s/g,'_'));
         if(!elText) return;
         if(snap.empty){ elText.textContent = 'Belum ada diskusi'; return; }
-        const p = snap.docs[0].data();
+        const docs = snap.docs.slice().sort((a, b) => (b.data().createdAt?.toMillis() || 0) - (a.data().createdAt?.toMillis() || 0));
+        const p = docs[0].data();
         elText.textContent = (p.posterNama ? p.posterNama + ': ' : '') + p.isi;
         if(elTime && p.createdAt) elTime.textContent = formatJamChat(p.createdAt.toDate());
-      }).catch(() => {});
+      }).catch(() => {
+        const elText = document.getElementById('pv-text-kelas-' + kelas.replace(/\s/g,'_'));
+        if(elText) elText.textContent = 'Gagal memuat';
+      });
   });
 }
 
@@ -2603,14 +2607,15 @@ function openKomunitasFeed(kelas){
 function renderKomunitasPosts(){
   const box = $('komunitas-posts');
   box.innerHTML = '<p class="muted small" style="text-align:center;">Memuat diskusi...</p>';
-  db.collection('komunitasPosts').where('kelas', '==', activeKelas).orderBy('createdAt', 'asc').get()
+  db.collection('komunitasPosts').where('kelas', '==', activeKelas).get()
     .then(snap => {
       box.innerHTML = '';
       if(snap.empty){
         box.innerHTML = '<p class="muted small" style="text-align:center;">Belum ada diskusi di kelas ini. Mulai yuk.</p>';
         return;
       }
-      snap.forEach(doc => {
+      const docs = snap.docs.slice().sort((a, b) => (a.data().createdAt?.toMillis() || 0) - (b.data().createdAt?.toMillis() || 0));
+      docs.forEach(doc => {
         const p = doc.data();
         const jam = p.createdAt ? formatJamChat(p.createdAt.toDate()) : '...';
         const div = document.createElement('div');
