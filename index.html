@@ -2617,6 +2617,8 @@ function renderKomunitasPosts(){
       const docs = snap.docs.slice().sort((a, b) => (a.data().createdAt?.toMillis() || 0) - (b.data().createdAt?.toMillis() || 0));
       docs.forEach(doc => {
         const p = doc.data();
+        const acc = getAccount();
+        const bolehHapus = p.posterUid === acc.uid || acc.peran === 'admin';
         const jam = p.createdAt ? formatJamChat(p.createdAt.toDate()) : '...';
         const div = document.createElement('div');
         div.className = 'komunitas-post';
@@ -2625,13 +2627,21 @@ function renderKomunitasPosts(){
             <span><span class="komunitas-post-nama">${p.posterNama || '?'}</span><span class="komunitas-post-role">${ROLE_LABEL[p.posterPeran] || ''}</span></span>
             <span class="komunitas-post-time">${jam}</span>
           </div>
-          <p class="komunitas-post-text">${(p.isi || '').replace(/</g,'&lt;')}</p>`;
+          <p class="komunitas-post-text">${(p.isi || '').replace(/</g,'&lt;')}</p>
+          ${bolehHapus ? `<div class="riwayat-jawab-actions" style="margin-top:6px;"><button type="button" class="admin-btn kick" data-id="${doc.id}">🗑️ Hapus</button></div>` : ''}`;
         box.appendChild(div);
       });
       box.scrollTop = box.scrollHeight;
     }).catch(() => {
       box.innerHTML = '<p class="muted small" style="text-align:center;">Gagal memuat diskusi.</p>';
     });
+}
+
+function handleHapusKomunitasPost(id){
+  if(!confirm('Hapus postingan ini?')) return;
+  db.collection('komunitasPosts').doc(id).delete()
+    .then(() => { showToast('Postingan dihapus.'); renderKomunitasPosts(); })
+    .catch(() => showToast('Gagal menghapus.'));
 }
 
 function handleKirimKomunitas(e){
@@ -2925,6 +2935,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Komunitas: kirim postingan (dummy, tersimpan lokal saja)
   $('komunitas-send-form').addEventListener('submit', handleKirimKomunitas);
+  $('komunitas-posts').addEventListener('click', (e) => {
+    const btn = e.target.closest('.admin-btn.kick');
+    if(btn) handleHapusKomunitasPost(btn.dataset.id);
+  });
 });
 
 </script>
