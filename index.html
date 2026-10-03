@@ -516,6 +516,12 @@ body{
   color:var(--purple-700);
   margin-bottom:2px;
 }
+.bubble-file-link{
+  display:block;background:rgba(255,255,255,0.18);border-radius:8px;
+  padding:8px 10px;margin-bottom:4px;color:inherit;font-weight:600;
+  font-size:13px;text-decoration:underline;word-break:break-all;
+}
+.bubble-them .bubble-file-link{background:var(--purple-050);color:var(--purple-700);}
 .bubble-deleted{font-style:italic;opacity:.75;}
 .bubble-edited{font-size:10px;opacity:.7;font-style:italic;}
 .bubble-actions{
@@ -909,6 +915,7 @@ body{
     <form id="chat-send-form" class="chat-input-bar">
       <label for="chat-image-input" class="btn-attach">📷</label>
       <input type="file" id="chat-image-input" accept="image/*" style="display:none;">
+      <button type="button" class="btn-attach" id="btn-attach-file">📎</button>
       <input type="text" id="chat-input" placeholder="Tulis pesan..." autocomplete="off">
       <button type="submit" class="btn-send">➤</button>
     </form>
@@ -1836,31 +1843,31 @@ function openChatDetail(kontak, isGroup, customChatId){
       perbaruiBadgeGlobal();
       snap.forEach(doc => {
         const m = doc.data();
+        if(m.deleted) return;
         const isMe = m.from === acc.uid;
         const div = document.createElement('div');
         div.className = 'bubble ' + (isMe ? 'bubble-me' : 'bubble-them');
         const createdMillis = m.createdAt ? m.createdAt.toMillis() : 0;
         const jam = m.createdAt ? formatJamChat(m.createdAt.toDate()) : '...';
         let isi = '';
-        if(activeChatIsGroup && !isMe && !m.deleted){
+        if(activeChatIsGroup && !isMe){
           isi += '<span class="bubble-sender">' + (m.fromName || 'Staf') + '</span>';
         }
-        if(m.deleted){
-          isi += '<span class="bubble-deleted">🚫 Pesan ini telah dihapus</span>';
-        } else {
-          if(m.imageBase64){
-            isi += '<img src="' + m.imageBase64 + '" class="bubble-image" alt="foto">';
-          }
-          if(m.text){
-            isi += (m.text || '').replace(/</g,'&lt;');
-          }
-          if(m.edited) isi += ' <span class="bubble-edited">(diedit)</span>';
+        if(m.imageBase64){
+          isi += '<img src="' + m.imageBase64 + '" class="bubble-image" alt="foto">';
         }
+        if(m.fileLink){
+          isi += '<a href="' + m.fileLink + '" target="_blank" class="bubble-file-link">' + (m.fileTipe === 'video' ? '🎬 ' : '📎 ') + (m.fileNama || 'Buka File') + '</a>';
+        }
+        if(m.text){
+          isi += (m.text || '').replace(/</g,'&lt;');
+        }
+        if(m.edited) isi += ' <span class="bubble-edited">(diedit)</span>';
         isi += '<span class="bubble-time">' + jam + '</span>';
-        if(isMe && !activeChatIsGroup && !m.deleted){
+        if(isMe && !activeChatIsGroup){
           isi += '<span class="bubble-check" data-created="' + createdMillis + '">✓</span>';
         }
-        if(isMe && !m.deleted){
+        if(isMe){
           isi += '<span class="bubble-actions">' +
             '<button type="button" class="bubble-edit-btn" data-msgid="' + doc.id + '" data-teks="' + escHtmlAttr(m.text) + '">✏️ Edit</button>' +
             '<button type="button" class="bubble-delete-btn" data-msgid="' + doc.id + '">🗑️ Hapus</button>' +
@@ -1894,10 +1901,8 @@ function handleEditPesan(chatId, messageId, teksLama){
 
 function handleHapusPesan(chatId, messageId){
   if(!confirm('Hapus pesan ini? Tindakan ini tidak bisa dibatalkan.')) return;
-  db.collection('chats').doc(chatId).collection('messages').doc(messageId).update({
-    deleted: true,
-    text: ''
-  }).catch(() => showToast('Gagal menghapus pesan, cek koneksi internet.'));
+  db.collection('chats').doc(chatId).collection('messages').doc(messageId).delete()
+    .catch(() => showToast('Gagal menghapus pesan, cek koneksi internet.'));
 }
 
 let pendingImageBase64 = null;
@@ -1950,6 +1955,24 @@ function batalkanGambarChat(){
   pendingImageBase64 = null;
   $('chat-image-input').value = '';
   $('chat-image-preview').style.display = 'none';
+}
+
+function handleKirimFileChat(){
+  if(!activeChatId) return;
+  const nama = prompt('Nama/label file atau video:');
+  if(nama === null || !nama.trim()) return;
+  const link = prompt('Tempel link Google Drive-nya:');
+  if(link === null || !link.trim()) return;
+  const tipe = confirm('Ini video? (OK = Video, Cancel = File biasa)') ? 'video' : 'file';
+  const acc = getAccount();
+  db.collection('chats').doc(activeChatId).collection('messages').add({
+    from: acc.uid,
+    fromName: acc.nama,
+    fileNama: nama.trim(),
+    fileLink: link.trim(),
+    fileTipe: tipe,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => showToast('Gagal mengirim, cek koneksi internet.'));
 }
 
 function handleSendChat(e){
@@ -2910,6 +2933,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Lampirkan foto & batal
   $('chat-image-input').addEventListener('change', handleImageSelect);
+  $('btn-attach-file').addEventListener('click', handleKirimFileChat);
   $('btn-cancel-image').addEventListener('click', batalkanGambarChat);
 
   // Edit & hapus pesan sendiri, buka foto besar (delegasi, karena bubble dibuat ulang tiap ada perubahan)
