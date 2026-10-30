@@ -2136,6 +2136,7 @@ function renderAdminUserList(){
   db.collection('users').get().then(snap => {
     list.innerHTML = '';
     if(snap.empty){ list.innerHTML = '<p class="muted small">Belum ada akun terdaftar.</p>'; return; }
+    const grupAktif = [], grupMenunggu = [], grupKick = [];
     snap.forEach(doc => {
       const u = doc.data();
       const uid = doc.id;
@@ -2157,8 +2158,39 @@ function renderAdminUserList(){
           ${!aktif ? `<button type="button" class="admin-btn approve" data-uid="${uid}">✅ Setujui</button>` : ''}
           ${uid !== getAccount().uid ? `<button type="button" class="admin-btn kick" data-uid="${uid}">⛔ Kick</button>` : ''}
         </div>`;
-      list.appendChild(card);
+      (aktif ? grupAktif : (diKick ? grupKick : grupMenunggu)).push(card);
     });
+
+    const tambahGrup = (judul, kartu) => {
+      if(!kartu.length) return;
+      const h = document.createElement('p');
+      h.className = 'settings-label';
+      h.style.margin = '14px 0 6px';
+      h.textContent = judul + ' (' + kartu.length + ')';
+      list.appendChild(h);
+      kartu.forEach(c => list.appendChild(c));
+    };
+    tambahGrup('MENUNGGU PERSETUJUAN', grupMenunggu);
+    tambahGrup('AKTIF', grupAktif);
+
+    if(grupKick.length){
+      const tombol = document.createElement('button');
+      tombol.type = 'button';
+      tombol.className = 'btn-buat-grup';
+      tombol.style.marginTop = '14px';
+      tombol.textContent = '⛔ Tampilkan akun di-kick (' + grupKick.length + ')';
+      const wadah = document.createElement('div');
+      wadah.style.display = 'none';
+      wadah.className = 'admin-user-list';
+      grupKick.forEach(c => wadah.appendChild(c));
+      tombol.addEventListener('click', () => {
+        const buka = wadah.style.display === 'none';
+        wadah.style.display = buka ? 'flex' : 'none';
+        tombol.textContent = (buka ? '▲ Sembunyikan' : '⛔ Tampilkan') + ' akun di-kick (' + grupKick.length + ')';
+      });
+      list.appendChild(tombol);
+      list.appendChild(wadah);
+    }
   }).catch(() => {
     list.innerHTML = '<p class="muted small">Gagal memuat daftar akun.</p>';
   });
